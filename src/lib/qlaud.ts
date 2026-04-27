@@ -210,6 +210,19 @@ export const qlaud = {
     return (await r.json()) as { object: 'list'; query: string; data: SearchHit[] };
   },
 
+  /** DELETE /v1/keys/:id — revoke a per-user key. Master-scope only.
+   *  Idempotent: 404 on an already-deleted key is treated as success
+   *  so re-deliveries of user.deleted don't bounce the webhook. */
+  revokeKey: async (keyId: string) => {
+    const r = await fetch(`${BASE()}/v1/keys/${keyId}`, {
+      method: 'DELETE',
+      headers: { 'x-api-key': MASTER() },
+    });
+    if (r.ok || r.status === 404) return;
+    const text = await r.text().catch(() => '');
+    throw new QlaudError(r.status, `revokeKey → ${r.status}: ${text.slice(0, 200)}`);
+  },
+
   /** POST /v1/tools — register a tool. Master-scope only. */
   registerTool: (def: ToolDefinition) =>
     call<ToolRegisterResult>('/v1/tools', {
