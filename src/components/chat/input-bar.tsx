@@ -42,6 +42,26 @@ export function InputBar({
       created_at: now,
     });
 
+    // Push an empty assistant placeholder immediately so the streaming
+    // cursor renders before the first byte arrives. Subsequent updates
+    // mutate this same row (matched on seq below). Without this the
+    // user sees a totally blank screen during the first ~200ms of
+    // model latency and assumes nothing is happening.
+    const errorMessage = (text: string): ThreadMessage => ({
+      seq: 1_000_000_000,
+      role: 'assistant',
+      content: [{ type: 'text', text: `⚠️ ${text}` }],
+      request_id: null,
+      created_at: Date.now(),
+    });
+    onAssistantUpdate({
+      seq: 1_000_000_000,
+      role: 'assistant',
+      content: [],
+      request_id: null,
+      created_at: now,
+    });
+
     let res: Response;
     try {
       res = await fetch('/api/chat', {
@@ -49,11 +69,25 @@ export function InputBar({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ threadId, message: trimmed }),
       });
-    } catch {
+    } catch (e) {
+      onAssistantUpdate(errorMessage(`network error: ${(e as Error).message}`));
       onTurnEnd();
       return;
     }
+
     if (!res.ok || !res.body) {
+      // Read the error body — our route handlers return JSON like
+      // { error, detail } on failure. Surface it so users (and we) can
+      // see what went wrong instead of staring at a blank screen.
+      const detail = await res.text().catch(() => '');
+      let parsed: { error?: string; detail?: string } | null = null;
+      try {
+        parsed = detail ? JSON.parse(detail) : null;
+      } catch {
+        /* not JSON, fall through */
+      }
+      const msg = parsed?.detail || parsed?.error || detail.slice(0, 300) || `HTTP ${res.status}`;
+      onAssistantUpdate(errorMessage(msg));
       onTurnEnd();
       return;
     }
@@ -103,8 +137,10 @@ export function InputBar({
       }
     };
 
+    let sawAnyEvent = false;
     try {
       for await (const ev of parseChatStream(res.body)) {
+        sawAnyEvent = true;
         switch (ev.type) {
           case 'text_delta': {
             const existing = blocksByIndex.get(ev.index);
@@ -148,7 +184,16 @@ export function InputBar({
         }
         onAssistantUpdate(buildSnapshot());
       }
+    } catch (e) {
+      onAssistantUpdate(errorMessage(`stream interrupted: ${(e as Error).message}`));
     } finally {
+      // If qlaud returned 200 with an empty body the cursor would
+      // blink forever otherwise — surface that as a clear failure.
+      if (!sawAnyEvent) {
+        onAssistantUpdate(
+          errorMessage('upstream returned no events. Check Vercel function logs for /api/chat.'),
+        );
+      }
       onTurnEnd();
     }
   }
