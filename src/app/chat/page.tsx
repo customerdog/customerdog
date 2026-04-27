@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
-import { getQlaudState } from '@/lib/user-state';
+import { ensureQlaudState } from '@/lib/user-state';
 import { qlaud } from '@/lib/qlaud';
 
 export const dynamic = 'force-dynamic';
@@ -13,10 +13,14 @@ export default async function ChatRootPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const state = await getQlaudState(userId);
-  if (!state) {
-    // Webhook hasn't fired yet (user just signed up but Clerk hasn't
-    // delivered user.created). Show a holding screen with a retry hint.
+  // Provisions inline if Clerk metadata is empty — the webhook is just
+  // a cache-warm. If qlaud or Clerk is unreachable we fall through to
+  // the holding screen so the user has something to retry.
+  let state;
+  try {
+    state = await ensureQlaudState(userId);
+  } catch (e) {
+    console.error('[chat/page] ensureQlaudState failed:', e);
     return <OnboardingPending />;
   }
 

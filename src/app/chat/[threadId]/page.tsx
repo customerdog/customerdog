@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
-import { getQlaudState } from '@/lib/user-state';
+import { ensureQlaudState } from '@/lib/user-state';
 import { qlaud } from '@/lib/qlaud';
 import { ChatShell } from '@/components/chat/chat-shell';
 
@@ -16,8 +16,15 @@ export default async function ChatThreadPage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
-  const state = await getQlaudState(userId);
-  if (!state) redirect('/chat');
+  // Provisions inline if missing — handled in /chat for the OnboardingPending
+  // screen, but if a user lands directly on a thread URL with no state we
+  // bounce to /chat which renders the friendly retry.
+  let state;
+  try {
+    state = await ensureQlaudState(userId);
+  } catch {
+    redirect('/chat');
+  }
 
   const { threadId } = await params;
 

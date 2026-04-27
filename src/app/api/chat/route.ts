@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { qlaud, QlaudError } from '@/lib/qlaud';
-import { getQlaudState } from '@/lib/user-state';
+import { ensureQlaudState } from '@/lib/user-state';
 
 export const runtime = 'nodejs';
 
@@ -58,11 +58,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const state = await getQlaudState(userId);
-  if (!state) {
+  let state;
+  try {
+    state = await ensureQlaudState(userId);
+  } catch (e) {
     return NextResponse.json(
-      { error: 'user not provisioned — Clerk webhook may not have fired yet' },
-      { status: 425 },
+      {
+        error: 'failed to provision qlaud account',
+        detail: e instanceof Error ? e.message.slice(0, 300) : String(e),
+      },
+      { status: 502 },
     );
   }
 

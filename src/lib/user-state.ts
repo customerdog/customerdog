@@ -1,5 +1,6 @@
 import 'server-only';
 import { clerkClient } from '@clerk/nextjs/server';
+import { qlaud } from './qlaud';
 
 // Where we keep each user's qlaud footprint. Lives in Clerk's
 // privateMetadata — server-only, ~8KB per user limit (we use ~200 bytes).
@@ -58,4 +59,65 @@ export async function setQlaudState(
     privateMetadata: state as unknown as Record<string, unknown>,
   });
   cache.set(clerkUserId, { state, loadedAt: Date.now() });
+}
+
+// Per-process dedup of in-flight provisioning attempts. Two requests
+// for the same brand-new user (e.g. quick refresh, multiple tabs) will
+// share a single mintKey + createThread roundtrip rather than racing.
+// Cross-instance races are still possible (different Vercel lambdas
+// for the same user); the loser ends up with an orphaned key, but it
+// has no holder so it can't be spent. Cheap to tolerate vs. the cost
+// of a distributed lock.
+const provisioning = new Map<string, Promise<QlaudUserState>>();
+
+/**
+ * Returns the user's qlaud state, provisioning it inline if Clerk's
+ * privateMetadata is empty. Use this on every read path the user
+ * actually depends on (chat pages, /api/chat, /api/threads, etc.) —
+ * the webhook becomes an optimization that warms the cache before
+ * the user ever loads /chat, not a load-bearing dependency.
+ *
+ * Throws on qlaud or Clerk failure. Callers should catch and render
+ * a friendly retry screen.
+ */
+export async function ensureQlaudState(
+  clerkUserId: string,
+): Promise<QlaudUserState> {
+  const existing = await getQlaudState(clerkUserId);
+  if (existing) return existing;
+
+  const inflight = provisioning.get(clerkUserId);
+  if (inflight) return inflight;
+
+  const promise = provisionInline(clerkUserId).finally(() => {
+    provisioning.delete(clerkUserId);
+  });
+  provisioning.set(clerkUserId, promise);
+  return promise;
+}
+
+async function provisionInline(clerkUserId: string): Promise<QlaudUserState> {
+  // Re-check inside the dedup gate — the webhook may have landed
+  // between the outer fast-path check and us acquiring the slot.
+  const existing = await getQlaudState(clerkUserId);
+  if (existing) return existing;
+
+  const budget = Number(process.env.NEW_USER_BUDGET_USD ?? '5');
+  const key = await qlaud.mintKey({
+    name: `chatai:${clerkUserId}`,
+    scope: 'standard',
+    maxSpendUsd: budget,
+  });
+  const thread = await qlaud.createThread({
+    apiKey: key.secret,
+    endUserId: clerkUserId,
+    metadata: { source: 'chatai-lazy' },
+  });
+  const state: QlaudUserState = {
+    qlaud_key_id: key.id,
+    qlaud_secret: key.secret,
+    qlaud_initial_thread_id: thread.id,
+  };
+  await setQlaudState(clerkUserId, state);
+  return state;
 }

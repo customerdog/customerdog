@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { qlaud } from '@/lib/qlaud';
-import { getQlaudState } from '@/lib/user-state';
+import { ensureQlaudState } from '@/lib/user-state';
 
 export const runtime = 'nodejs';
 
@@ -11,8 +11,12 @@ export const runtime = 'nodejs';
 export async function GET(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-  const state = await getQlaudState(userId);
-  if (!state) return NextResponse.json({ data: [] });
+  let state;
+  try {
+    state = await ensureQlaudState(userId);
+  } catch {
+    return NextResponse.json({ data: [] });
+  }
   const url = new URL(req.url);
   const q = url.searchParams.get('q')?.trim();
   if (!q) return NextResponse.json({ data: [] });
