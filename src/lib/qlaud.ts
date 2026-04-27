@@ -1,0 +1,215 @@
+import { env } from './env';
+
+// Typed wrapper over the qlaud REST API. Single source of truth for all
+// qlaud calls in the app — handlers and server components import from
+// here and don't touch fetch() directly.
+//
+// Two auth patterns:
+//   - Master key: server-side only, used for /v1/keys, /v1/tools, /v1/usage.
+//   - Per-user key: minted at signup, stored per-user in Supabase, used
+//     for /v1/threads/* and /v1/search.
+
+const BASE = () => env.QLAUD_BASE_URL();
+const MASTER = () => env.QLAUD_MASTER_KEY();
+
+type Json = Record<string, unknown>;
+
+async function call<T = Json>(
+  path: string,
+  init: RequestInit & { apiKey?: string } = {},
+): Promise<T> {
+  const apiKey = init.apiKey ?? MASTER();
+  const headers = new Headers(init.headers);
+  headers.set('x-api-key', apiKey);
+  if (init.body && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
+  const res = await fetch(`${BASE()}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new QlaudError(res.status, `${path} → ${res.status}: ${text.slice(0, 500)}`);
+  }
+  return (await res.json()) as T;
+}
+
+export class QlaudError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'QlaudError';
+  }
+}
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export type ApiKeyMintResult = {
+  id: string;
+  name: string;
+  prefix: string;
+  scope: 'standard' | 'admin';
+  secret: string; // returned ONCE
+  max_spend_usd: number | null;
+};
+
+export type Thread = {
+  id: string;
+  object: 'thread';
+  end_user_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: number;
+  last_active_at: number;
+};
+
+export type ThreadMessage = {
+  seq: number;
+  role: 'user' | 'assistant';
+  content: unknown;
+  request_id: string | null;
+  created_at: number;
+};
+
+export type ToolDefinition = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  webhook_url: string;
+  timeout_ms?: number;
+};
+
+export type ToolRegisterResult = ToolDefinition & {
+  id: string;
+  secret: string; // returned ONCE
+};
+
+export type SearchHit = {
+  thread_id: string;
+  seq: number;
+  role: string;
+  snippet: string;
+  score: number;
+  created_at: number;
+};
+
+// ─── API surface ────────────────────────────────────────────────────────────
+
+export const qlaud = {
+  /** POST /v1/keys — mint a per-user key with a hard spend cap. */
+  mintKey: (args: {
+    name: string;
+    scope?: 'standard' | 'admin';
+    maxSpendUsd?: number | null;
+  }) =>
+    call<ApiKeyMintResult>('/v1/keys', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: args.name,
+        scope: args.scope ?? 'standard',
+        max_spend_usd: args.maxSpendUsd ?? null,
+      }),
+    }),
+
+  /** POST /v1/threads — create a new conversation. */
+  createThread: (args: {
+    apiKey: string;
+    endUserId?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    call<Thread>('/v1/threads', {
+      method: 'POST',
+      apiKey: args.apiKey,
+      body: JSON.stringify({
+        end_user_id: args.endUserId,
+        metadata: args.metadata,
+      }),
+    }),
+
+  /** GET /v1/threads — list threads for the caller. */
+  listThreads: (args: {
+    apiKey: string;
+    endUserId?: string;
+    limit?: number;
+  }) => {
+    const url = new URL(`${BASE()}/v1/threads`);
+    if (args.endUserId) url.searchParams.set('end_user_id', args.endUserId);
+    url.searchParams.set('limit', String(args.limit ?? 20));
+    return fetch(url, { headers: { 'x-api-key': args.apiKey } }).then(
+      async (r) => {
+        if (!r.ok) {
+          throw new QlaudError(r.status, `listThreads → ${r.status}`);
+        }
+        return (await r.json()) as { object: 'list'; data: Thread[] };
+      },
+    );
+  },
+
+  /** GET /v1/threads/:id/messages — full history of a single thread. */
+  listThreadMessages: (args: { apiKey: string; threadId: string; limit?: number }) => {
+    const url = new URL(`${BASE()}/v1/threads/${args.threadId}/messages`);
+    url.searchParams.set('limit', String(args.limit ?? 100));
+    return fetch(url, { headers: { 'x-api-key': args.apiKey } }).then(
+      async (r) => {
+        if (!r.ok) {
+          throw new QlaudError(r.status, `listThreadMessages → ${r.status}`);
+        }
+        return (await r.json()) as {
+          object: 'list';
+          data: ThreadMessage[];
+          has_more: boolean;
+          next_after_seq: number | null;
+        };
+      },
+    );
+  },
+
+  /** POST /v1/threads/:id/messages — STREAMING. Returns the raw upstream
+   *  Response so the caller can pipe `body` straight back to its own
+   *  client without re-buffering. The /api/chat route uses this. */
+  streamMessage: async (args: {
+    apiKey: string;
+    threadId: string;
+    body: Record<string, unknown>;
+  }): Promise<Response> => {
+    return fetch(`${BASE()}/v1/threads/${args.threadId}/messages`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': args.apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ ...args.body, stream: true }),
+    });
+  },
+
+  /** GET /v1/search — semantic search across the caller's threads. */
+  search: async (args: {
+    apiKey: string;
+    query: string;
+    endUserId?: string;
+    threadId?: string;
+    limit?: number;
+  }) => {
+    const url = new URL(
+      args.threadId
+        ? `${BASE()}/v1/threads/${args.threadId}/search`
+        : `${BASE()}/v1/search`,
+    );
+    url.searchParams.set('q', args.query);
+    if (args.endUserId) url.searchParams.set('end_user_id', args.endUserId);
+    url.searchParams.set('limit', String(args.limit ?? 10));
+    const r = await fetch(url, { headers: { 'x-api-key': args.apiKey } });
+    if (!r.ok) throw new QlaudError(r.status, `search → ${r.status}`);
+    return (await r.json()) as { object: 'list'; query: string; data: SearchHit[] };
+  },
+
+  /** POST /v1/tools — register a tool. Master-scope only. */
+  registerTool: (def: ToolDefinition) =>
+    call<ToolRegisterResult>('/v1/tools', {
+      method: 'POST',
+      body: JSON.stringify(def),
+    }),
+
+  /** GET /v1/tools — list registered tools. */
+  listTools: () =>
+    call<{ object: 'list'; data: Array<ToolRegisterResult> }>('/v1/tools'),
+};
