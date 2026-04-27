@@ -63,32 +63,64 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, deduped: true });
   }
 
-  // 1. Mint the per-user qlaud key.
-  const key = await qlaud.mintKey({
-    name: `chatai:${clerkUserId}`,
-    scope: 'standard',
-    maxSpendUsd: DEFAULT_BUDGET_USD,
-  });
+  // Each step has its own try/catch so we can blame the right service
+  // in the response — Clerk surfaces the reply body in its dashboard
+  // delivery log, and "qlaud mintKey 401" is a much faster diagnosis
+  // than a generic 500.
+  let key: Awaited<ReturnType<typeof qlaud.mintKey>>;
+  try {
+    key = await qlaud.mintKey({
+      name: `chatai:${clerkUserId}`,
+      scope: 'standard',
+      maxSpendUsd: DEFAULT_BUDGET_USD,
+    });
+  } catch (e) {
+    return failWith('qlaud.mintKey', e, 'QLAUD_MASTER_KEY may be invalid or revoked.');
+  }
 
-  // 2. Create their first thread.
-  const thread = await qlaud.createThread({
-    apiKey: key.secret,
-    endUserId: clerkUserId,
-    metadata: { source: 'chatai-signup' },
-  });
+  let thread: Awaited<ReturnType<typeof qlaud.createThread>>;
+  try {
+    thread = await qlaud.createThread({
+      apiKey: key.secret,
+      endUserId: clerkUserId,
+      metadata: { source: 'chatai-signup' },
+    });
+  } catch (e) {
+    return failWith('qlaud.createThread', e);
+  }
 
-  // 3. Persist the link.
-  await insertUserRow({
-    clerk_user_id: clerkUserId,
-    email,
-    qlaud_key_id: key.id,
-    qlaud_secret: key.secret,
-    qlaud_initial_thread_id: thread.id,
-  });
+  try {
+    await insertUserRow({
+      clerk_user_id: clerkUserId,
+      email,
+      qlaud_key_id: key.id,
+      qlaud_secret: key.secret,
+      qlaud_initial_thread_id: thread.id,
+    });
+  } catch (e) {
+    return failWith(
+      'supabase.insertUserRow',
+      e,
+      'SUPABASE_SERVICE_ROLE_KEY may be missing/wrong, or the `users` table does not exist (run `pnpm run db:push`).',
+    );
+  }
 
   return NextResponse.json({
     ok: true,
     qlaud_key_id: key.id,
     qlaud_initial_thread_id: thread.id,
   });
+}
+
+function failWith(step: string, e: unknown, hint?: string) {
+  const message = e instanceof Error ? e.message : String(e);
+  console.error(`[clerk-webhook] ${step} failed:`, message);
+  return NextResponse.json(
+    {
+      error: `${step} failed`,
+      detail: message.slice(0, 500),
+      ...(hint ? { hint } : {}),
+    },
+    { status: 502 },
+  );
 }

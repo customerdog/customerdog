@@ -161,6 +161,8 @@ src/
     tool-execution.tsx           tool_use + tool_result card
     streaming-cursor.tsx         blinking cursor
 scripts/
+  check-env.ts                   live-probe Supabase + qlaud creds
+  db-push.ts                     apply migrations via pg, verify via REST
   register-tools.ts              one-shot tool registration
 supabase/migrations/
   0001_users.sql                 Clerk id → qlaud key mapping

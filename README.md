@@ -32,24 +32,43 @@ attribution. **~300–500 lines of glue per AI app, deleted.**
 # 1. Clone + install
 git clone https://github.com/qlaudAI/chatai.git
 cd chatai
-pnpm install
+npm install
 
 # 2. Copy env template + fill in your three accounts:
-#    - Clerk:    clerk.com → API Keys
-#    - Supabase: supabase.com → Project Settings → API
+#    - Clerk:    clerk.com → API Keys + Webhooks
+#    - Supabase: supabase.com → Settings → API + Settings → Database (password)
 #    - qlaud:    qlaud.ai/keys → Master key
 cp .env.example .env.local
 # (edit .env.local)
 
-# 3. Run Supabase migrations
-pnpm supabase db push
+# 3. Verify your env actually works (live probes Supabase + qlaud)
+npm run check
 
-# 4. Register the demo tools with qlaud (one-time after deploy)
-pnpm tsx scripts/register-tools.ts
+# 4. Apply Supabase migrations (uses pg over the direct DB connection,
+#    no Supabase CLI required; verifies via REST after)
+npm run db:push
 
-# 5. Dev
-pnpm dev
+# 5. Register the demo tools with qlaud (one-time, after your first deploy
+#    so the webhook URLs point at your live host)
+npm run register-tools
+
+# 6. Dev — `npm run check` runs automatically as predev; if any required
+#    env var is missing or wrong, dev refuses to start with a clear error.
+npm run dev
 ```
+
+### Required env vars
+
+| Var | Where to get it |
+|---|---|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | dashboard.clerk.com → API Keys |
+| `CLERK_SECRET_KEY` | same |
+| `CLERK_WEBHOOK_SECRET` | dashboard.clerk.com → Webhooks → endpoint pointed at `/api/webhooks/clerk` (subscribe `user.created`) |
+| `NEXT_PUBLIC_SUPABASE_URL` | supabase.com/dashboard → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same (look for `sb_publishable_…` or anon JWT) |
+| `SUPABASE_SERVICE_ROLE_KEY` | same (look for `service_role` / `sb_secret_…` — bypasses RLS, server-only) |
+| `SUPABASE_DB_PASSWORD` | supabase.com/dashboard → Settings → Database (only needed for `npm run db:push`) |
+| `QLAUD_MASTER_KEY` | console.qlaud.ai/keys (mint with scope `admin`) |
 
 ## Deploy
 
@@ -58,9 +77,9 @@ pnpm dev
 Or any other Next.js host (Railway, Cloudflare Pages with the Workers
 adapter, Netlify, your own).
 
-After your first deploy: re-run `pnpm tsx scripts/register-tools.ts` so
-the tool webhooks point at your live URL, copy the printed signing
-secrets into your env vars, redeploy.
+After your first deploy: re-run `npm run register-tools` against the
+live `NEXT_PUBLIC_APP_URL` so the tool webhooks point at your live host,
+copy the printed signing secrets into your env vars, redeploy.
 
 ## Adding a tool
 
