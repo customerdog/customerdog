@@ -21,11 +21,6 @@ export const env = {
   // Clerk
   CLERK_WEBHOOK_SECRET: () => required('CLERK_WEBHOOK_SECRET'),
 
-  // Supabase
-  SUPABASE_URL: () => required('NEXT_PUBLIC_SUPABASE_URL'),
-  SUPABASE_ANON_KEY: () => required('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
-  SUPABASE_SERVICE_ROLE_KEY: () => required('SUPABASE_SERVICE_ROLE_KEY'),
-
   // qlaud
   QLAUD_BASE_URL: () => optional('QLAUD_BASE_URL') ?? 'https://api.qlaud.ai',
   QLAUD_MASTER_KEY: () => required('QLAUD_MASTER_KEY'),
@@ -36,6 +31,4 @@ export const env = {
   QLAUD_TOOL_SECRET_WEB_SEARCH: () => optional('QLAUD_TOOL_SECRET_WEB_SEARCH'),
   QLAUD_TOOL_SECRET_GENERATE_IMAGE: () =>
     optional('QLAUD_TOOL_SECRET_GENERATE_IMAGE'),
-  QLAUD_TOOL_SECRET_SAVE_TO_DRIVE: () =>
-    optional('QLAUD_TOOL_SECRET_SAVE_TO_DRIVE'),
 };

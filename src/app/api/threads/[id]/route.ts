@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { qlaud } from '@/lib/qlaud';
-import { getUserRowOrNull } from '@/lib/supabase/server';
+import { getQlaudState } from '@/lib/user-state';
 
 export const runtime = 'nodejs';
 
@@ -12,11 +12,11 @@ export async function GET(
 ) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-  const user = await getUserRowOrNull(userId);
-  if (!user) return NextResponse.json({ error: 'not provisioned' }, { status: 425 });
+  const state = await getQlaudState(userId);
+  if (!state) return NextResponse.json({ error: 'not provisioned' }, { status: 425 });
   const { id } = await params;
   const r = await qlaud.listThreadMessages({
-    apiKey: user.qlaud_secret,
+    apiKey: state.qlaud_secret,
     threadId: id,
     limit: 200,
   });

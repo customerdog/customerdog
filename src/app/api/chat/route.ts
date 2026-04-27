@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { qlaud, QlaudError } from '@/lib/qlaud';
-import { getUserRowOrNull } from '@/lib/supabase/server';
+import { getQlaudState } from '@/lib/user-state';
 
 export const runtime = 'nodejs';
 
@@ -58,8 +58,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const user = await getUserRowOrNull(userId);
-  if (!user) {
+  const state = await getQlaudState(userId);
+  if (!state) {
     return NextResponse.json(
       { error: 'user not provisioned — Clerk webhook may not have fired yet' },
       { status: 425 },
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
   let upstream: Response;
   try {
     upstream = await qlaud.streamMessage({
-      apiKey: user.qlaud_secret,
+      apiKey: state.qlaud_secret,
       threadId: body.threadId,
       body: {
         model: 'claude-sonnet-4-6',

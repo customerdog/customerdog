@@ -1,34 +1,41 @@
 # chatai — architecture
 
-One page. The whole system is three managed services held together by
-~600 lines of Next.js glue.
+One page. Two managed services held together by ~500 lines of Next.js
+glue. No database to provision.
 
-## The three moving parts
+## The two moving parts
 
 ```
-   ┌──────────┐    ┌────────────┐    ┌────────┐
-   │  Clerk   │    │  Supabase  │    │ qlaud  │
-   │  (auth)  │    │  (state)   │    │  (AI)  │
-   └────┬─────┘    └─────┬──────┘    └───┬────┘
-        │                │                │
-        │ user.created   │ users +        │ /v1/keys
-        │ webhook        │ drive_items    │ /v1/threads
-        │                │                │ /v1/tools
-        │                │                │ /v1/search
-        ▼                ▼                ▼
+   ┌──────────────────────┐         ┌────────┐
+   │ Clerk                │         │ qlaud  │
+   │   - auth/sessions    │         │  (AI)  │
+   │   - per-user state   │         │        │
+   │     in privateMeta   │         │        │
+   └──────────┬───────────┘         └───┬────┘
+              │                          │
+              │ user.created webhook    │ /v1/keys
+              │                          │ /v1/threads
+              │                          │ /v1/tools
+              │                          │ /v1/search
+              ▼                          ▼
    ┌─────────────────────────────────────────────┐
    │      Next.js 15 (App Router) — chatai       │
    └─────────────────────────────────────────────┘
 ```
 
-- **Clerk** owns identity + sessions. We never touch passwords or JWTs
-  directly — `clerkMiddleware` gates `/chat/*` and `auth()` returns the
-  current `userId` in server handlers.
-- **Supabase** holds two tables: `users` (Clerk id → qlaud key mapping)
-  and `drive_items` (the `save_to_drive` tool's backing store). No
-  `messages` table. No `threads` table. qlaud owns conversation state.
+- **Clerk** owns identity + sessions AND per-user state. The Clerk user
+  record's `privateMetadata` (~8KB per user, server-only) holds the
+  qlaud key id + secret + initial thread id we mint at signup. We never
+  touch passwords or JWTs directly — `clerkMiddleware` gates `/chat/*`
+  and `auth()` returns the current `userId` in server handlers.
 - **qlaud** owns everything AI-shaped: per-user keys with spend caps,
   thread persistence, tool dispatch loop, semantic search.
+
+Why no separate database? Because the only persistent state we own per
+user is three short strings (`qlaud_key_id`, `qlaud_secret`,
+`qlaud_initial_thread_id`). Spinning up Postgres + RLS + migrations to
+hold that is theatre — Clerk already has a record per user; we just bolt
+the strings onto it.
 
 ## Onboarding pipeline
 
@@ -41,16 +48,19 @@ Clerk fires user.created webhook → POST /api/webhooks/clerk
       ▼
 1. mint qlaud key with $5 cap (qlaud.mintKey)
 2. create initial thread tagged with end_user_id (qlaud.createThread)
-3. INSERT into supabase.users (clerk_user_id, qlaud_secret, ...)
+3. clerkClient.users.updateUserMetadata(userId, {
+     privateMetadata: { qlaud_key_id, qlaud_secret,
+                        qlaud_initial_thread_id }
+   })
       │
       ▼
 user redirected to /chat → /chat/[initial-thread-id]
 ```
 
-The whole pipeline is **~30 lines** in
+The whole pipeline is **~70 lines** in
 [`src/app/api/webhooks/clerk/route.ts`](../src/app/api/webhooks/clerk/route.ts).
-Idempotent on Clerk re-delivery: we check the row exists before minting
-a second key.
+Idempotent on Clerk re-delivery: we check `privateMetadata.qlaud_secret`
+before minting a second key.
 
 ## The chat turn
 
@@ -59,7 +69,7 @@ user types in InputBar
       │
       ▼  POST /api/chat { threadId, message }
 Next.js handler (src/app/api/chat/route.ts):
-   - look up user.qlaud_secret from Supabase
+   - look up qlaud key from Clerk privateMetadata (60s in-memory cache)
    - call qlaud.streamMessage with all registered tools attached
    - pipe upstream Response.body straight to the browser (no buffering)
       │
@@ -108,7 +118,8 @@ component.
 
 ## What we never built
 
-- Messages table, schema, migrations, retention policy
+- Database (no Supabase, no Postgres, no migrations, no RLS policies)
+- Messages table, schema, retention policy
 - Context-window assembly (truncating old messages, sliding window)
 - Tool-call state machine (the "model wants tool X, run it, send back
   result, model wants tool Y, …" loop)
@@ -134,7 +145,7 @@ src/
       page.tsx                   Picks latest thread, redirects
       [threadId]/page.tsx        Server-loads history + renders shell
     api/
-      webhooks/clerk/route.ts    user.created → mint+thread+insert
+      webhooks/clerk/route.ts    user.created → mint + thread + privateMeta
       chat/route.ts              SSE proxy to qlaud
       threads/route.ts           list + create
       threads/[id]/route.ts      single thread history
@@ -142,13 +153,12 @@ src/
       tools/
         web-search/route.ts      DuckDuckGo, signed
         generate-image/route.ts  pollinations.ai, signed
-        save-to-drive/route.ts   Supabase insert, signed
   lib/
     env.ts                       typed env access
     qlaud.ts                     typed REST client
     qlaud-stream.ts              SSE → typed events
-    supabase/{server,client}.ts  service-role + anon
-    tools/definitions.ts         the 3 tool defs (single source of truth)
+    user-state.ts                Clerk privateMetadata get/set + cache
+    tools/definitions.ts         the tool defs (single source of truth)
     tools/verify-signature.ts    HMAC verifier
   components/chat/
     chat-shell.tsx               sidebar + main pane
@@ -161,10 +171,6 @@ src/
     tool-execution.tsx           tool_use + tool_result card
     streaming-cursor.tsx         blinking cursor
 scripts/
-  check-env.ts                   live-probe Supabase + qlaud creds
-  db-push.ts                     apply migrations via pg, verify via REST
+  check-env.ts                   live-probe Clerk + qlaud creds
   register-tools.ts              one-shot tool registration
-supabase/migrations/
-  0001_users.sql                 Clerk id → qlaud key mapping
-  0002_drive_items.sql           save_to_drive backing store
 ```

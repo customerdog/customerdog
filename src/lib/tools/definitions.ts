@@ -51,20 +51,5 @@ export function toolDefs(baseUrl: string): ToolDefinition[] {
       webhook_url: `${baseUrl}/api/tools/generate-image`,
       timeout_ms: 60000,
     },
-    {
-      name: 'save_to_drive',
-      description:
-        'Persist a snippet of text or markdown to the user’s personal scratch drive. Returns the saved-file id.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Short human-readable title.' },
-          content: { type: 'string', description: 'The text or markdown body.' },
-        },
-        required: ['title', 'content'],
-      },
-      webhook_url: `${baseUrl}/api/tools/save-to-drive`,
-      timeout_ms: 10000,
-    },
   ];
 }

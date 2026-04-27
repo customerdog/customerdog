@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
-import { getUserRowOrNull } from '@/lib/supabase/server';
+import { getQlaudState } from '@/lib/user-state';
 import { qlaud } from '@/lib/qlaud';
 
 export const dynamic = 'force-dynamic';
@@ -13,16 +13,15 @@ export default async function ChatRootPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const user = await getUserRowOrNull(userId);
-  if (!user) {
+  const state = await getQlaudState(userId);
+  if (!state) {
     // Webhook hasn't fired yet (user just signed up but Clerk hasn't
     // delivered user.created). Show a holding screen with a retry hint.
     return <OnboardingPending />;
   }
 
-  // Pull threads via the user's qlaud key.
   const list = await qlaud.listThreads({
-    apiKey: user.qlaud_secret,
+    apiKey: state.qlaud_secret,
     endUserId: userId,
     limit: 1,
   });
@@ -35,7 +34,7 @@ export default async function ChatRootPage() {
   // No threads at all (newly seeded users have an initial one — but if
   // someone deleted them all, fall back to creating a new one).
   const fresh = await qlaud.createThread({
-    apiKey: user.qlaud_secret,
+    apiKey: state.qlaud_secret,
     endUserId: userId,
   });
   redirect(`/chat/${fresh.id}`);

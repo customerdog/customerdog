@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
-import { getUserRowOrNull } from '@/lib/supabase/server';
+import { getQlaudState } from '@/lib/user-state';
 import { qlaud } from '@/lib/qlaud';
 import { ChatShell } from '@/components/chat/chat-shell';
 
@@ -16,19 +16,19 @@ export default async function ChatThreadPage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
-  const user = await getUserRowOrNull(userId);
-  if (!user) redirect('/chat');
+  const state = await getQlaudState(userId);
+  if (!state) redirect('/chat');
 
   const { threadId } = await params;
 
   const [history, threadList] = await Promise.all([
     qlaud.listThreadMessages({
-      apiKey: user.qlaud_secret,
+      apiKey: state.qlaud_secret,
       threadId,
       limit: 200,
     }),
     qlaud.listThreads({
-      apiKey: user.qlaud_secret,
+      apiKey: state.qlaud_secret,
       endUserId: userId,
       limit: 50,
     }),

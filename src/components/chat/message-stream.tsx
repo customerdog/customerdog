@@ -53,8 +53,8 @@ function EmptyState() {
       </div>
       <h2 className="text-lg font-semibold">Start a conversation</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Ask anything. The assistant has access to web search, image
-        generation, and file save tools — try{' '}
+        Ask anything. The assistant has access to web search and image
+        generation — try{' '}
         <span className="text-foreground">
           &ldquo;search the web for the latest Mars rover news&rdquo;
         </span>

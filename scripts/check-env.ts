@@ -2,12 +2,13 @@
 /**
  * Pre-flight check: verifies the env vars in .env.local are not just
  * present but actually work. Catches "I copied the publishable key into
- * the service-role slot" before the first user signup blows up.
+ * the secret-key slot" before the first user signup blows up.
  *
  * Usage:
- *   pnpm run check
+ *   npm run check
  *
- * Exits non-zero if any required check fails.
+ * Exits non-zero if any required check fails. The `predev` hook runs
+ * this automatically before `next dev`.
  */
 
 const RESET = '\x1b[0m';
@@ -29,77 +30,61 @@ function skip(name: string, message: string) {
   results.push({ name, ok: true, message: `${YELLOW}skip${RESET} — ${message}` });
 }
 
-async function checkSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function checkClerk() {
+  const pub = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const sec = process.env.CLERK_SECRET_KEY;
+  const wh = process.env.CLERK_WEBHOOK_SECRET;
 
-  if (!url) return fail('Supabase URL', 'NEXT_PUBLIC_SUPABASE_URL is not set');
-  if (!/^https:\/\/[a-z0-9]+\.supabase\.co\/?$/.test(url)) {
-    return fail(
-      'Supabase URL',
-      `value "${url}" does not look like a Supabase project URL`,
-    );
-  }
-  pass('Supabase URL', url);
-
-  if (!anon) {
-    fail('Supabase anon key', 'NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
-  } else if (!anon.startsWith('sb_publishable_') && !anon.startsWith('eyJ')) {
+  if (!pub) {
     fail(
-      'Supabase anon key',
-      'value does not look like an anon key (expected sb_publishable_… or a JWT starting with eyJ)',
+      'Clerk publishable key',
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — get it from dashboard.clerk.com → API Keys.',
     );
+  } else if (!pub.startsWith('pk_test_') && !pub.startsWith('pk_live_')) {
+    fail('Clerk publishable key', 'value does not look like a Clerk publishable key');
   } else {
-    pass('Supabase anon key', `${anon.slice(0, 20)}…`);
+    pass('Clerk publishable key', pub.slice(0, 16) + '…');
   }
 
-  if (!serviceRole) {
-    return fail(
-      'Supabase service-role key',
-      'SUPABASE_SERVICE_ROLE_KEY is not set — Clerk webhook cannot insert users without it. Get it from Settings → API → "service_role".',
-    );
+  if (!sec) {
+    return fail('Clerk secret key', 'CLERK_SECRET_KEY is not set');
   }
-  if (serviceRole === anon) {
-    return fail(
-      'Supabase service-role key',
-      'service-role key is the SAME as the anon key — paste the "service_role" / "sb_secret_…" value, not the publishable one.',
-    );
+  if (!sec.startsWith('sk_test_') && !sec.startsWith('sk_live_')) {
+    return fail('Clerk secret key', 'value does not look like a Clerk secret key');
   }
 
-  // Live probe: try a one-row select against `users` (works whether the
-  // table has rows or not — RLS is bypassed by service-role).
+  // Live probe: hit the Clerk backend API. The /v1/users endpoint
+  // requires a valid secret key; 401 means a wrong/revoked key.
   try {
-    const r = await fetch(`${url}/rest/v1/users?select=clerk_user_id&limit=1`, {
-      headers: {
-        apikey: serviceRole,
-        Authorization: `Bearer ${serviceRole}`,
-      },
+    const r = await fetch('https://api.clerk.com/v1/users?limit=1', {
+      headers: { Authorization: `Bearer ${sec}` },
     });
     if (r.status === 401) {
       return fail(
-        'Supabase service-role key',
-        'returned 401 Unauthorized — the key is invalid or revoked.',
+        'Clerk secret key',
+        'returned 401 — key is invalid or revoked.',
       );
-    }
-    if (r.status === 404 || r.status === 400) {
-      const text = await r.text().catch(() => '');
-      if (text.includes('does not exist') || text.includes('schema cache')) {
-        return fail(
-          'Supabase users table',
-          'connection works but `users` table is missing — run `pnpm run db:push` to apply migrations.',
-        );
-      }
     }
     if (!r.ok) {
       return fail(
-        'Supabase service-role key',
-        `unexpected ${r.status} from REST API: ${(await r.text().catch(() => '')).slice(0, 200)}`,
+        'Clerk secret key',
+        `unexpected ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`,
       );
     }
-    pass('Supabase service-role key', 'authenticated + users table reachable');
+    pass('Clerk secret key', 'authenticated against api.clerk.com');
   } catch (e) {
-    return fail('Supabase service-role key', `network error: ${(e as Error).message}`);
+    return fail('Clerk secret key', `network error: ${(e as Error).message}`);
+  }
+
+  if (!wh) {
+    skip(
+      'Clerk webhook secret',
+      'set after you create a Webhooks endpoint pointing at /api/webhooks/clerk',
+    );
+  } else if (!wh.startsWith('whsec_')) {
+    fail('Clerk webhook secret', 'value does not start with whsec_');
+  } else {
+    pass('Clerk webhook secret', 'whsec_…');
   }
 }
 
@@ -148,47 +133,10 @@ async function checkQlaud() {
   }
 }
 
-function checkClerk() {
-  const pub = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const sec = process.env.CLERK_SECRET_KEY;
-  const wh = process.env.CLERK_WEBHOOK_SECRET;
-
-  if (!pub) {
-    fail(
-      'Clerk publishable key',
-      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — get it from dashboard.clerk.com → API Keys.',
-    );
-  } else if (!pub.startsWith('pk_test_') && !pub.startsWith('pk_live_')) {
-    fail('Clerk publishable key', 'value does not look like a Clerk publishable key');
-  } else {
-    pass('Clerk publishable key', pub.slice(0, 16) + '…');
-  }
-
-  if (!sec) {
-    fail('Clerk secret key', 'CLERK_SECRET_KEY is not set');
-  } else if (!sec.startsWith('sk_test_') && !sec.startsWith('sk_live_')) {
-    fail('Clerk secret key', 'value does not look like a Clerk secret key');
-  } else {
-    pass('Clerk secret key', sec.slice(0, 16) + '…');
-  }
-
-  if (!wh) {
-    skip(
-      'Clerk webhook secret',
-      'set after you create a Webhooks endpoint pointing at /api/webhooks/clerk',
-    );
-  } else if (!wh.startsWith('whsec_')) {
-    fail('Clerk webhook secret', 'value does not start with whsec_');
-  } else {
-    pass('Clerk webhook secret', 'whsec_…');
-  }
-}
-
 (async () => {
   console.log(`${DIM}Checking env from .env.local…${RESET}\n`);
-  await checkSupabase();
+  await checkClerk();
   await checkQlaud();
-  checkClerk();
 
   for (const r of results) {
     const icon = r.ok ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
@@ -198,7 +146,7 @@ function checkClerk() {
   const failed = results.filter((r) => !r.ok);
   console.log();
   if (failed.length === 0) {
-    console.log(`${GREEN}all good — you're ready to run \`pnpm dev\`.${RESET}`);
+    console.log(`${GREEN}all good — you're ready to run \`npm run dev\`.${RESET}`);
   } else {
     console.log(
       `${RED}${failed.length} check${failed.length === 1 ? '' : 's'} failed${RESET} — fix the items above, then re-run \`npm run check\`.`,

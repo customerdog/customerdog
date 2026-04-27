@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { qlaud } from '@/lib/qlaud';
-import { getUserRowOrNull } from '@/lib/supabase/server';
+import { getQlaudState } from '@/lib/user-state';
 
 export const runtime = 'nodejs';
 
@@ -11,13 +11,13 @@ export const runtime = 'nodejs';
 export async function GET(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-  const user = await getUserRowOrNull(userId);
-  if (!user) return NextResponse.json({ data: [] });
+  const state = await getQlaudState(userId);
+  if (!state) return NextResponse.json({ data: [] });
   const url = new URL(req.url);
   const q = url.searchParams.get('q')?.trim();
   if (!q) return NextResponse.json({ data: [] });
   const r = await qlaud.search({
-    apiKey: user.qlaud_secret,
+    apiKey: state.qlaud_secret,
     query: q,
     endUserId: userId,
     limit: 10,
