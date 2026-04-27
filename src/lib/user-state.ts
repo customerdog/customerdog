@@ -104,14 +104,14 @@ async function provisionInline(clerkUserId: string): Promise<QlaudUserState> {
 
   const budget = Number(process.env.NEW_USER_BUDGET_USD ?? '5');
   const key = await qlaud.mintKey({
-    name: `chatai:${clerkUserId}`,
+    name: `customerdog:${clerkUserId}`,
     scope: 'standard',
     maxSpendUsd: budget,
   });
   const thread = await qlaud.createThread({
     apiKey: key.secret,
     endUserId: clerkUserId,
-    metadata: { source: 'chatai-lazy' },
+    metadata: { source: 'customerdog-lazy' },
   });
   const state: QlaudUserState = {
     qlaud_key_id: key.id,

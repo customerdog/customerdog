@@ -63,7 +63,7 @@ export async function POST(req: Request) {
   let key: Awaited<ReturnType<typeof qlaud.mintKey>>;
   try {
     key = await qlaud.mintKey({
-      name: `chatai:${clerkUserId}`,
+      name: `customerdog:${clerkUserId}`,
       scope: 'standard',
       maxSpendUsd: DEFAULT_BUDGET_USD,
     });
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     thread = await qlaud.createThread({
       apiKey: key.secret,
       endUserId: clerkUserId,
-      metadata: { source: 'chatai-signup' },
+      metadata: { source: 'customerdog-signup' },
     });
   } catch (e) {
     return failWith('qlaud.createThread', e);

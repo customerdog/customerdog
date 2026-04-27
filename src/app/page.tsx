@@ -12,14 +12,14 @@ export default async function LandingPage() {
       <header className="flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
           <Logo />
-          chatai
+          customerdog
           <span className="ml-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
             demo
           </span>
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           <a
-            href="https://github.com/qlaudAI/chatai"
+            href="https://github.com/customerdog/customerdog"
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground hover:text-foreground"
@@ -62,7 +62,7 @@ export default async function LandingPage() {
             Try the demo →
           </Link>
           <a
-            href="https://github.com/qlaudAI/chatai"
+            href="https://github.com/customerdog/customerdog"
             target="_blank"
             rel="noreferrer"
             className="rounded-md border border-border px-5 py-3 text-sm font-medium hover:border-primary/40"

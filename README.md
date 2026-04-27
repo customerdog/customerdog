@@ -1,4 +1,4 @@
-# chatai
+# customerdog
 
 > Open-source, production-quality chat app built on **qlaud** + **Clerk**.
 > Two services. Fork it, fill in two env-var sets, deploy to Vercel.
@@ -31,8 +31,8 @@ two-string mapping per user (qlaud key + initial thread id) in
 
 ```bash
 # 1. Clone + install
-git clone https://github.com/qlaudAI/chatai.git
-cd chatai
+git clone https://github.com/customerdog/customerdog.git
+cd customerdog
 npm install
 
 # 2. Copy env template + fill in your two accounts:
@@ -64,7 +64,7 @@ npm run dev
 
 ## Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FqlaudAI%2Fchatai)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog)
 
 Or any other Next.js host (Railway, Cloudflare Pages with the Workers
 adapter, Netlify, your own).

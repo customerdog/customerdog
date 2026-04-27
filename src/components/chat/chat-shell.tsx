@@ -75,7 +75,7 @@ export function ChatShell({
             <span className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-bold text-primary-foreground">
               q.
             </span>
-            <span className="text-sm font-semibold">chatai</span>
+            <span className="text-sm font-semibold">customerdog</span>
           </a>
           <button
             onClick={handleNewThread}

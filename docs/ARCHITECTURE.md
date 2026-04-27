@@ -1,4 +1,4 @@
-# chatai — architecture
+# customerdog — architecture
 
 One page. Two managed services held together by ~500 lines of Next.js
 glue. No database to provision.
@@ -19,7 +19,7 @@ glue. No database to provision.
               │                          │ /v1/search
               ▼                          ▼
    ┌─────────────────────────────────────────────┐
-   │      Next.js 15 (App Router) — chatai       │
+   │      Next.js 15 (App Router) — customerdog  │
    └─────────────────────────────────────────────┘
 ```
 
@@ -94,7 +94,7 @@ qlaud sees tool_use → POST <webhook_url> signed with HMAC-SHA256
                                  request_id, thread_id, end_user_id }
                             │
                             ▼
-              chatai handler (src/app/api/tools/<name>/route.ts):
+              customerdog handler (src/app/api/tools/<name>/route.ts):
                  1. verify HMAC (lib/tools/verify-signature.ts)
                  2. parse + validate input (zod)
                  3. run the business logic
