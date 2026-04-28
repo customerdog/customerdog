@@ -48,7 +48,24 @@ export function ChatShell({
           <span className="text-base">🐕</span>
           <span className="text-sm font-semibold">{companyName} support</span>
         </header>
-      ) : null}
+      ) : (
+        <header className="flex items-center justify-between border-b border-border bg-background px-3 py-2">
+          <span className="text-sm font-semibold">{companyName}</span>
+          <button
+            type="button"
+            onClick={() => {
+              // Tell the host page (widget.js) to hide the iframe.
+              window.parent?.postMessage({ type: 'customerdog:close' }, '*');
+            }}
+            aria-label="Close chat"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+      )}
 
       <main className="flex flex-1 flex-col overflow-hidden">
         {messages.length === 0 ? (
