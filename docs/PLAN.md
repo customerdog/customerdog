@@ -1,96 +1,162 @@
 # CustomerDog — open-source customer support AI
 
-**Pitch:** An embeddable AI support agent. B2B SaaS companies install the widget on their site; their end-users chat with it; the AI answers from the company's knowledge base, looks up user-specific context via webhooks, and escalates to a human ticket when it can't resolve. Powered by qlaud (threads, tools, search, billing) + chatai (UI patterns).
+**Pitch:** An open-source AI customer support agent that anyone can clone and deploy for their own company. Visitors chat anonymously through an embeddable widget or hosted page; the AI answers from the company's knowledge base, can collect contact info, and escalates to a human via email / Slack / Linear / Zendesk when it can't resolve. The company's admin manages the knowledge base and sees every action the AI took through a simple admin UI backed by Supabase (whose Table Editor doubles as an Airtable-like raw view for power users).
 
-## What it shares with chatai
-- Streaming SSE chat UI with live tool-execution cards
-- qlaud per-user keys with hard spend caps
-- Tool dispatch pattern (HMAC-signed webhooks, retries handled by qlaud)
-- Clerk auth pattern, Next.js 15 + App Router
+**Powered by qlaud** (threads, tools, prompt caching) + **Supabase** (config, KB sources, conversations, activity log).
 
-## What's new vs chatai
-1. **Multi-tenancy** — chatai stores per-user state in Clerk privateMetadata (one user = one qlaud key). CustomerDog needs **per-company** state: a company's KB, settings, ticket integrations, plus per-end-user conversations within that company. This means a real database (Supabase/Postgres back).
-2. **Embeddable widget** — companies drop a `<script>` snippet on their site that loads an iframe with the chat. Postmessage protocol for theming + identifying the end-user.
-3. **Knowledge base** — file upload → parse (pdf/md/html) → embed → store. Each company's KB is isolated. Likely use qlaud's Vectorize via per-company namespace, or pgvector if you want full ownership.
-4. **Ticket escalation** — when the AI can't resolve, it calls a `create_ticket` tool that fans out to Linear / Zendesk / Slack / email per the company's configured destination.
+## Open-source design tenets
+
+1. **Clone-and-deploy.** Single git clone, Vercel deploy, fill in env vars, done. No services to provision beyond a free Supabase project and a qlaud key.
+2. **Single-tenant per clone.** One repo = one company. No multi-tenancy complexity. If 50 companies use customerdog, that's 50 deployments.
+3. **Anonymous-first chat.** Visitors don't sign up. Cookie-only session. Optional email/phone capture during escalation, configured by admin.
+4. **No DB for KB.** Knowledge base lives in Supabase as rows of parsed text, but is loaded into memory at server boot and stuffed into the system prompt with `cache_control` markers. Anthropic's prompt cache eats the cost.
+5. **Single admin password.** No Clerk, no OAuth dance. Admin sets `ADMIN_PASSWORD` in env, signs in once, gets a signed cookie session.
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 15 (App Router) — same as chatai |
-| Auth (admin/B2B) | Clerk Organizations (built for multi-tenant) |
-| DB (per-company state) | Supabase (companies, kb_docs, tickets, end_users, conversations) |
-| AI substrate | qlaud (threads, tools, search, billing) |
-| Embeddings (KB) | qlaud's `/v1/search` infra OR OpenAI embeddings + pgvector |
-| Email | Resend |
-| Ticket destinations | Linear API, Zendesk API, Slack webhooks, plain SMTP |
-| Widget delivery | Plain `<script>` + iframe + postMessage |
-
-## 4 demo tools to ship
-
-1. **`search_kb`** — semantic search the company's uploaded docs. Returns top-N passages with source URLs.
-2. **`get_user_context`** — POSTs to the company's configured webhook URL with the end-user's id; expects back `{name, email, plan, recent_orders, account_status, ...}`. Lets the AI personalize answers without you ever ingesting customer data.
-3. **`create_ticket`** — escalates to whatever ticket destination the company configured (Linear issue / Zendesk ticket / Slack message / email). Returns the ticket URL so the AI can reply "I've opened ticket #ABC-123 for you."
-4. **`send_email_to_user`** — sends a follow-up email summary via Resend (e.g., "Your password reset link is on the way").
-
-## Phases (~2 weeks for MVP)
-
-| Phase | Time | What |
+| Layer | Choice | Why |
 |---|---|---|
-| 1 | 2h | Fork + rebrand chatai (logo, copy, package name → customerdog) |
-| 2 | 1d | Multi-tenancy: Clerk Organizations + `companies` table + per-org qlaud key minted in webhook |
-| 3 | 1d | Embeddable widget: `/embed/[companyId]` route + `customerdog.js` bootstrap script + postMessage protocol |
-| 4 | 2d | Knowledge base: upload → parse → embed → store + admin UI to manage docs |
-| 5 | 1d | Tool: `search_kb` (per-company namespace) |
-| 6 | 1d | Tool: `get_user_context` (POST to company webhook with HMAC) |
-| 7 | 1d | Tool: `create_ticket` (Linear/Zendesk/Slack/email selectable per company) |
-| 8 | 1d | Tool: `send_email_to_user` (Resend) |
-| 9 | 2d | Admin dashboard: conversations, tickets, KB management, integration settings |
-| 10 | 1d | Onboarding flow: sign up → set company → upload KB → install snippet |
-| 11 | 1d | Pricing + Stripe: per-conversation metering pulled from qlaud `/v1/usage` |
-| 12 | 1d | Polish + deploy (Vercel) |
+| Framework | Next.js 15 (App Router) | Inherited from chatai |
+| AI substrate | qlaud (one standard key per deploy) | Threads + tool dispatch loop + prompt cache passthrough |
+| Storage | Supabase (free tier) | Built-in Table Editor = the Airtable-like UX without us building it |
+| Admin auth | Single password env var → signed HTTP-only cookie | Zero third-party services |
+| Visitor session | HTTP-only cookie, anonymous UUID | No auth, no friction |
+| Email | Resend | Simple, generous free tier |
+| Tickets | Email / Slack / Linear / Zendesk (admin picks one) | Most common destinations |
+| Widget | Plain `<script>` + iframe + postMessage | No build step for host site |
 
-## Things to decide upfront (don't block, but write down)
+## Supabase schema (4 tables)
 
-- **End-user identity**: anonymous chat (just collect email if escalation needed) vs. SSO from the parent app (postMessage in a JWT). Recommend: start anonymous, add JWT-based identification later.
-- **KB source of truth**: do companies upload files (PDF/MD), point at a sitemap URL (recursive crawl), connect a docs source (Notion/Intercom Help Center)? MVP = file upload only.
-- **Pricing model**: per-conversation, per-resolved-conversation, per-seat, free-up-to-N. Recommend: free up to 100 convos/mo, then $0.50/conversation. Maps cleanly to qlaud's `cost_micros` per request_id with a flat markup.
+```sql
+config           -- single row (id=1)
+  company_name | brand_color | ticket_destination | visitor_contact_required
+  | support_email | system_prompt_extras | updated_at
 
-## Get started
+kb_sources       -- knowledge base
+  id | type ('url'|'markdown'|'pasted') | source | parsed_content
+  | active | updated_at
+
+conversations    -- anonymous visitor sessions
+  id | anon_visitor_id | qlaud_thread_id | started_at | ended_at
+  | contact_email | contact_phone | resolved | summary
+
+actions          -- audit log of every AI action
+  id | conversation_id | type ('ticket_created'|'email_sent'|'contact_collected')
+  | payload jsonb | result_url | created_at
+```
+
+The schema ships as `supabase/schema.sql`. Companies run it once via Supabase's SQL Editor at setup.
+
+## Routes
+
+### Visitor (no auth)
+| Route | Purpose |
+|---|---|
+| `/` | Landing page → "Chat with our AI support" CTA → starts a chat |
+| `/chat` | Full-page chat UI (for `support.companyfoo.com` deploys) |
+| `/embed` | Same chat, no header/sidebar/branding chrome — sized for iframe widget |
+| `/widget.js` | Vanilla JS bootstrap (~3KB). Drops a chat bubble onto the host page; opens iframe → `/embed` |
+| `/api/chat` | SSE streaming chat endpoint. Reads `cd_visitor` + `cd_thread` cookies; creates qlaud thread on first message; sends with cached system prompt |
+
+### Admin (gated by signed cookie)
+| Route | Purpose |
+|---|---|
+| `/admin/login` | Single password input |
+| `/admin` | Overview cards: open conversations, tickets this week, KB last refreshed |
+| `/admin/kb` | Manage `kb_sources` rows: add URL (server fetches+parses), paste markdown, delete, "Re-learn" |
+| `/admin/conversations` | Table of past conversations + transcript view (transcript fetched live from qlaud) |
+| `/admin/activity` | Audit log table from `actions` |
+| `/admin/settings` | Edit `config` row (company name, brand color, ticket destination + secrets, visitor contact requirement) |
+| `/admin/embed` | Shows the `<script>` snippet to copy + live preview |
+
+Each admin table page has an "Open in Supabase" link for power-user raw access.
+
+### Tools (HMAC-signed, called by qlaud)
+| Route | Purpose |
+|---|---|
+| `/api/tools/create-ticket` | Escalates to admin's chosen destination (email/Slack/Linear/Zendesk). Refuses if `visitor_contact_required` is set and contact not yet collected. Logs to `actions`. |
+| `/api/tools/send-email` | Sends a follow-up email via Resend. Logs to `actions`. |
+
+## Env vars
 
 ```bash
-# Clone chatai as the seed
-git clone https://github.com/qlaudAI/chatai.git customerdog
+# qlaud — one standard key, all chats use it
+QLAUD_KEY=qlk_live_…
+QLAUD_BASE_URL=https://api.qlaud.ai          # optional
+
+# Supabase — Project Settings → API
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ…
+
+# Admin auth
+ADMIN_PASSWORD=<long-random-string>           # set this; share with whoever runs admin
+ADMIN_COOKIE_SECRET=<long-random-string>      # signs the session cookie
+
+# Tools (optional — needed when admin chooses these)
+RESEND_API_KEY=re_…                           # for send_email
+TICKET_EMAIL_TO=support@yourcompany.com       # if ticket_destination = email
+SLACK_WEBHOOK_URL=https://hooks.slack.com/…   # if ticket_destination = slack
+LINEAR_API_KEY=lin_api_…                      # if ticket_destination = linear
+LINEAR_TEAM_ID=…                              # if ticket_destination = linear
+ZENDESK_SUBDOMAIN=…                           # if ticket_destination = zendesk
+ZENDESK_EMAIL=…                               # if ticket_destination = zendesk
+ZENDESK_API_TOKEN=…                           # if ticket_destination = zendesk
+
+# Per-tool HMAC secrets (populated by `npm run register-tools` after first deploy)
+QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
+QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
+
+# Public
+NEXT_PUBLIC_APP_URL=https://support.yourcompany.com
+```
+
+## Setup flow (what someone cloning this does)
+
+```bash
+# 1. Clone
+git clone https://github.com/customerdog/customerdog.git
 cd customerdog
+npm install
 
-# Detach from chatai's remote, point at your own
-git remote remove origin
-git remote add origin git@github.com:customerdog/customerdog.git
-git branch -M main
+# 2. Supabase: create a free project at supabase.com, then in SQL Editor:
+#    paste & run supabase/schema.sql
 
-# Wipe the chatai-specific commit history (optional — keeps things clean)
-rm -rf .git && git init && git add -A && git commit -m "initial: forked from qlaudAI/chatai"
+# 3. qlaud: create a standard key at console.qlaud.ai/keys
 
-# Rename in package.json + README (manually edit chatai → customerdog
-# in package.json, README, .env.example)
+# 4. Env
+cp .env.example .env.local
+# fill in QLAUD_KEY, SUPABASE_*, ADMIN_PASSWORD, ADMIN_COOKIE_SECRET
 
-# Push to the new remote
-git push -u origin main
+# 5. Verify
+npm run check
+
+# 6. Deploy (Vercel / Railway / Fly / your own)
+vercel deploy
+
+# 7. Register tools with qlaud (one-time, after first deploy)
+npm run register-tools
+# copy the printed secrets back into env, redeploy
+
+# 8. Open https://your-deploy.vercel.app/admin/login
+#    sign in, go to /admin/kb, paste docs URLs / markdown, click "Re-learn"
+
+# 9. Embed the widget on your site:
+#    <script src="https://your-deploy.vercel.app/widget.js" defer></script>
 ```
 
-## What to tell the next session
+## Five-commit execution plan
 
-When you start a new session in `/customerdog`, paste this as your first message:
+1. **`feat: supabase schema + admin password gate + drop Clerk`** — supabase client, schema.sql, admin session cookie, /admin/login, gate /admin/* in middleware. Drop Clerk dep + sign-in/sign-up/clerk-webhook + user-state.ts.
+2. **`feat: knowledge base ingestion + admin/kb page`** — fetch+parse URLs, write rows to Supabase, in-memory KB cache with cache_control system prompt assembly, admin/kb CRUD UI.
+3. **`feat: anonymous visitor chat with cookie session`** — rewrite /api/chat for anonymous, cookie-based threading, drop thread sidebar/search/list, drop old web-search & generate-image tools.
+4. **`feat: create_ticket + send_email tools + activity log + remaining admin pages`** — escalation tools per destination, Resend email, fire-and-forget activity-log writes, /admin/activity, /admin/conversations, /admin/settings.
+5. **`feat: embeddable widget + /embed route + admin/embed page`** — vanilla JS widget bootstrap, iframe-friendly /embed chat UI, snippet generator with live preview.
 
-> I'm building CustomerDog — an open-source AI customer support product, forked from chatai. The plan is in `docs/PLAN.md`. Read it, then start with Phase 1 (rebrand) and Phase 2 (Clerk Organizations + Supabase companies table). Don't auto-deploy anything; ask before pushing.
+Plus a final commit updating README.md with the deploy guide above.
 
-That gives the next session full context without you having to re-explain.
+## Decisions deferred to Phase 2
 
-## Future git remote
-
-```bash
-git remote add origin git@github.com:customerdog/customerdog.git
-git branch -M main
-git push -u origin main
-```
+- **Multi-admin / Clerk Organizations** — single-password is enough for MVP solo deployments.
+- **`get_user_context` webhook** — fetch the visitor's account info from the company's backend when they're authenticated on the host site (postMessage JWT). Adds personalized answers.
+- **Stripe metering** — pull from qlaud `/v1/usage`, charge per-conversation. Only relevant if customerdog itself becomes a hosted product (not a clone-and-deploy).
+- **Self-hosted Supabase** — companies who hate managed services already can: same env vars, point at their own.
