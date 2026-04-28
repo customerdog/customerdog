@@ -59,26 +59,22 @@ export function toolDefs(baseUrl: string): ToolDefinition[] {
     {
       name: 'send_email_to_user',
       description:
-        "Send a follow-up email to the visitor (e.g., a fresh password reset link, a copy of the resolution, or a confirmation of the ticket you filed). Only use after collecting the visitor's email address. Don't send promotional content.",
+        "Send a follow-up email recap or confirmation. The email is sent to the company's support address with the visitor BCC'd, so the visitor has a copy in their inbox AND the support team has a record. You only choose the subject and body — recipients are resolved server-side from the company's configured support email and the visitor's already-collected email. The visitor must have provided their email; if not, ask for it first. Don't send promotional content; this is transactional only.",
       input_schema: {
         type: 'object',
         properties: {
-          to: {
-            type: 'string',
-            description:
-              "Visitor's email address (must be the one they provided; do not invent).",
-          },
           subject: {
             type: 'string',
-            description: 'Short, clear subject line.',
+            description:
+              'Short, clear subject line. Will appear to both support and visitor.',
           },
           body: {
             type: 'string',
             description:
-              "Plain-text email body. Don't include marketing footers; the email is transactional.",
+              "Plain-text email body. Address the visitor directly (e.g., 'Hi! As we discussed…') since they're the BCC'd recipient. Don't include marketing footers; the email is transactional.",
           },
         },
-        required: ['to', 'subject', 'body'],
+        required: ['subject', 'body'],
       },
       webhook_url: `${baseUrl}/api/tools/send-email`,
       timeout_ms: 15000,

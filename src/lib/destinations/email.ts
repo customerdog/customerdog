@@ -13,6 +13,7 @@ export type EmailSendArgs = {
   to: string;
   subject: string;
   text: string;
+  bcc?: string | string[];
   replyTo?: string;
   from?: string;
 };
@@ -42,6 +43,11 @@ export async function sendEmail(args: EmailSendArgs): Promise<EmailSendResult> {
       subject: args.subject,
       text: args.text,
       reply_to: args.replyTo,
+      bcc: args.bcc
+        ? Array.isArray(args.bcc)
+          ? args.bcc
+          : [args.bcc]
+        : undefined,
     }),
     signal: AbortSignal.timeout(15_000),
   });
