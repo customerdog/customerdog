@@ -1,105 +1,68 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import type { Thread, ThreadMessage } from '@/lib/qlaud';
-import { ThreadList } from './thread-list';
+import type { ThreadMessage } from '@/lib/qlaud';
 import { MessageStream } from './message-stream';
 import { InputBar } from './input-bar';
-import { SearchBar } from './search-bar';
 
-// The single live container for /chat/[threadId]. Owns:
-//   - the in-memory list of threads (so creating a new one is instant)
-//   - the in-memory list of messages for the current thread (history +
-//     anything we've streamed during this session)
-//   - the streaming state (used by InputBar to know if it should disable
-//     itself, and by MessageStream to render the cursor)
+/**
+ * Single-conversation chat surface for an anonymous visitor.
+ *
+ * No sidebar, no thread list, no search — one visitor = one rolling
+ * conversation tied to their cd_thread cookie. Server-side /api/chat
+ * issues the cookie on first message; the client never sees the
+ * thread id directly.
+ *
+ * Two render modes:
+ *   "page"   — full screen with header showing company name. Used at
+ *              /chat for the standalone "support.theircompany.com"
+ *              deployment.
+ *   "embed"  — no header, transparent background, sized to fit inside
+ *              an iframe. Used at /embed for the script-tag widget.
+ */
 export function ChatShell({
-  threadId,
-  initialMessages,
-  threads,
-  hasOlder: initialHasOlder,
-  oldestLoadedSeq: initialOldestSeq,
+  companyName = 'Support',
+  brandColor,
+  mode = 'page',
 }: {
-  threadId: string;
-  initialMessages: ThreadMessage[];
-  threads: Thread[];
-  hasOlder: boolean;
-  oldestLoadedSeq: number | null;
+  companyName?: string;
+  brandColor?: string;
+  mode?: 'page' | 'embed';
 }) {
-  const router = useRouter();
-  const [threadsState, setThreads] = useState<Thread[]>(threads);
-  const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [hasOlder, setHasOlder] = useState(initialHasOlder);
-  const [oldestSeq, setOldestSeq] = useState<number | null>(initialOldestSeq);
-  const [loadingOlder, setLoadingOlder] = useState(false);
 
-  async function handleNewThread() {
-    const r = await fetch('/api/threads', { method: 'POST' });
-    if (!r.ok) return;
-    const t = (await r.json()) as Thread;
-    setThreads((prev) => [t, ...prev]);
-    router.push(`/chat/${t.id}`);
-  }
-
-  // Load the next page of older messages from qlaud (server-side
-  // backward pagination via before_seq cursor).
-  async function loadOlder() {
-    if (loadingOlder || !hasOlder || oldestSeq == null) return;
-    setLoadingOlder(true);
-    try {
-      const r = await fetch(
-        `/api/threads/${threadId}?before_seq=${oldestSeq}&limit=30`,
-      );
-      if (!r.ok) return;
-      const j = (await r.json()) as {
-        data: ThreadMessage[];
-        has_more: boolean;
-        next_before_seq: number | null;
-      };
-      const olderChrono = [...j.data].reverse();
-      setMessages((prev) => [...olderChrono, ...prev]);
-      setHasOlder(j.has_more);
-      setOldestSeq(j.next_before_seq);
-    } finally {
-      setLoadingOlder(false);
-    }
-  }
+  // Optional: apply brand color as CSS variable so child components
+  // pick it up via var(--brand-color).
+  const style = brandColor
+    ? ({ ['--brand-color' as never]: brandColor } as React.CSSProperties)
+    : undefined;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      <aside className="hidden w-72 shrink-0 flex-col border-r border-border bg-muted/40 md:flex">
-        <div className="flex items-center justify-between px-4 py-3">
-          <a href="/" className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-bold text-primary-foreground">
-              q.
-            </span>
-            <span className="text-sm font-semibold">customerdog</span>
-          </a>
-          <button
-            onClick={handleNewThread}
-            className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
-          >
-            + New
-          </button>
-        </div>
-        <div className="px-3 pb-2">
-          <SearchBar />
-        </div>
-        <ThreadList threads={threadsState} activeId={threadId} />
-      </aside>
+    <div
+      className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground"
+      style={style}
+    >
+      {mode === 'page' ? (
+        <header className="flex items-center gap-2 border-b border-border bg-background px-4 py-3">
+          <span className="text-base">🐕</span>
+          <span className="text-sm font-semibold">{companyName} support</span>
+        </header>
+      ) : null}
 
-      <main className="flex flex-1 flex-col">
-        <MessageStream
-          messages={messages}
-          streaming={streaming}
-          hasOlder={hasOlder}
-          loadingOlder={loadingOlder}
-          onLoadOlder={loadOlder}
-        />
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {messages.length === 0 ? (
+          <EmptyState companyName={companyName} />
+        ) : (
+          <MessageStream
+            messages={messages}
+            streaming={streaming}
+            hasOlder={false}
+            loadingOlder={false}
+            onLoadOlder={() => {}}
+          />
+        )}
         <InputBar
-          threadId={threadId}
           disabled={streaming}
           onTurnStart={(userMsg) => {
             setStreaming(true);
@@ -117,6 +80,21 @@ export function ChatShell({
           onTurnEnd={() => setStreaming(false)}
         />
       </main>
+    </div>
+  );
+}
+
+function EmptyState({ companyName }: { companyName: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <div className="text-3xl">🐕</div>
+      <h2 className="mt-3 text-lg font-semibold">
+        Hi! I&apos;m the {companyName} AI assistant.
+      </h2>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+        Ask me anything — about our product, your account, or to get
+        you connected with a human.
+      </p>
     </div>
   );
 }

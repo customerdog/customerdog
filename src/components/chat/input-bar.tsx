@@ -19,13 +19,11 @@ import { parseChatStream } from '@/lib/qlaud-stream';
 // keeps each iteration's blocks contained instead of stuffing them
 // all into a single mega-bubble.
 export function InputBar({
-  threadId,
   disabled,
   onTurnStart,
   onAssistantUpdate,
   onTurnEnd,
 }: {
-  threadId: string;
   disabled: boolean;
   onTurnStart: (userMsg: ThreadMessage) => void;
   onAssistantUpdate: (msg: ThreadMessage) => void;
@@ -77,7 +75,7 @@ export function InputBar({
       res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ threadId, message: trimmed }),
+        body: JSON.stringify({ message: trimmed }),
       });
     } catch (e) {
       onAssistantUpdate(errorMessage(`network error: ${(e as Error).message}`, 1));
@@ -335,7 +333,7 @@ export function InputBar({
             onChange={autoSize}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder="Message qlaud…"
+            placeholder="Ask anything…"
             disabled={disabled}
             className="flex-1 resize-none bg-transparent py-1 text-sm placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
           />
@@ -362,14 +360,13 @@ export function InputBar({
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
           Powered by{' '}
           <a
-            href="https://qlaud.ai"
+            href="https://github.com/customerdog/customerdog"
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground"
           >
-            qlaud
-          </a>{' '}
-          · Threads, tools, and search built in.
+            customerdog
+          </a>
         </p>
       </div>
     </div>

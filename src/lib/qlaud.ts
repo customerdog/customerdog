@@ -8,17 +8,16 @@ import { env } from './env';
 // SECURITY: this module is server-only. The `import 'server-only'` line
 // at the top makes Next.js refuse to bundle it for the browser — any
 // client component that imports the runtime `qlaud` object (instead of
-// just types) will fail the build. The master key (env.QLAUD_MASTER_KEY)
-// and per-user secrets must never reach the browser; they grant the
-// ability to mint new keys and burn the spend cap.
+// just types) will fail the build.
 //
-// Two auth patterns:
-//   - Master key: used for /v1/keys, /v1/tools, /v1/usage.
-//   - Per-user key: minted at signup, stashed in Clerk privateMetadata,
-//     read via lib/user-state.ts. Used for /v1/threads/* and /v1/search.
+// Auth model: ONE key per deployment. customerdog is single-tenant per
+// clone — the company that deployed it is the qlaud account. We use
+// QLAUD_KEY for everything: chat (threads + messages) AND admin ops
+// (tools registration). Operators who care about blast radius can
+// split this into two keys later.
 
 const BASE = () => env.QLAUD_BASE_URL();
-const MASTER = () => env.QLAUD_MASTER_KEY();
+const KEY = () => env.QLAUD_KEY();
 
 type Json = Record<string, unknown>;
 
@@ -26,7 +25,7 @@ async function call<T = Json>(
   path: string,
   init: RequestInit & { apiKey?: string } = {},
 ): Promise<T> {
-  const apiKey = init.apiKey ?? MASTER();
+  const apiKey = init.apiKey ?? KEY();
   const headers = new Headers(init.headers);
   headers.set('x-api-key', apiKey);
   if (init.body && !headers.has('content-type')) {
@@ -50,16 +49,7 @@ export class QlaudError extends Error {
   }
 }
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-type ApiKeyMintResult = {
-  id: string;
-  name: string;
-  prefix: string;
-  scope: 'standard' | 'admin';
-  secret: string; // returned ONCE
-  max_spend_usd: number | null;
-};
+// ─── Types ──────────────────────────────────────────────────────────────
 
 export type Thread = {
   id: string;
@@ -91,81 +81,26 @@ type ToolRegisterResult = ToolDefinition & {
   secret: string; // returned ONCE
 };
 
-export type SearchHit = {
-  thread_id: string;
-  seq: number;
-  role: string;
-  snippet: string;
-  score: number;
-  created_at: number;
-};
-
-// ─── API surface ────────────────────────────────────────────────────────────
+// ─── API surface ────────────────────────────────────────────────────────
 
 export const qlaud = {
-  /** POST /v1/keys — mint a per-user key with a hard spend cap. */
-  mintKey: (args: {
-    name: string;
-    scope?: 'standard' | 'admin';
-    maxSpendUsd?: number | null;
-  }) =>
-    call<ApiKeyMintResult>('/v1/keys', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: args.name,
-        scope: args.scope ?? 'standard',
-        max_spend_usd: args.maxSpendUsd ?? null,
-      }),
-    }),
-
-  /** POST /v1/threads — create a new conversation. */
+  /** POST /v1/threads — create a new conversation tagged with the
+   *  visitor's anonymous id (passed as Anthropic's end_user_id). */
   createThread: (args: {
-    apiKey: string;
     endUserId?: string;
     metadata?: Record<string, unknown>;
-  }) =>
+  } = {}) =>
     call<Thread>('/v1/threads', {
       method: 'POST',
-      apiKey: args.apiKey,
       body: JSON.stringify({
         end_user_id: args.endUserId,
         metadata: args.metadata,
       }),
     }),
 
-  /** GET /v1/threads — list threads for the caller. */
-  listThreads: (args: {
-    apiKey: string;
-    endUserId?: string;
-    limit?: number;
-  }) => {
-    const url = new URL(`${BASE()}/v1/threads`);
-    if (args.endUserId) url.searchParams.set('end_user_id', args.endUserId);
-    url.searchParams.set('limit', String(args.limit ?? 20));
-    return fetch(url, { headers: { 'x-api-key': args.apiKey } }).then(
-      async (r) => {
-        if (!r.ok) {
-          throw new QlaudError(r.status, `listThreads → ${r.status}`);
-        }
-        return (await r.json()) as { object: 'list'; data: Thread[] };
-      },
-    );
-  },
-
-  /** GET /v1/threads/:id/messages — paginated message list.
-   *
-   *  For chat UIs (newest first, scroll up for older):
-   *    initial:  listThreadMessages({ threadId, order: 'desc', limit: 30 })
-   *    older:    listThreadMessages({ threadId, order: 'desc', limit: 30,
-   *                                   beforeSeq: previousResponse.next_before_seq })
-   *
-   *  For log-replay UIs (oldest first):
-   *    initial:  listThreadMessages({ threadId, limit: 50 })
-   *    next:     listThreadMessages({ threadId, limit: 50,
-   *                                   afterSeq: previousResponse.next_after_seq })
-   */
+  /** GET /v1/threads/:id/messages — paginated message list, used by
+   *  /admin/conversations to render past transcripts on demand. */
   listThreadMessages: (args: {
-    apiKey: string;
     threadId: string;
     limit?: number;
     order?: 'asc' | 'desc';
@@ -177,87 +112,67 @@ export const qlaud = {
     if (args.order) url.searchParams.set('order', args.order);
     if (args.afterSeq != null) url.searchParams.set('after_seq', String(args.afterSeq));
     if (args.beforeSeq != null) url.searchParams.set('before_seq', String(args.beforeSeq));
-    return fetch(url, { headers: { 'x-api-key': args.apiKey } }).then(
-      async (r) => {
-        if (!r.ok) {
-          throw new QlaudError(r.status, `listThreadMessages → ${r.status}`);
-        }
-        return (await r.json()) as {
-          object: 'list';
-          data: ThreadMessage[];
-          has_more: boolean;
-          next_after_seq: number | null;
-          next_before_seq: number | null;
-        };
-      },
-    );
+    return fetch(url, { headers: { 'x-api-key': KEY() } }).then(async (r) => {
+      if (!r.ok) {
+        throw new QlaudError(r.status, `listThreadMessages → ${r.status}`);
+      }
+      return (await r.json()) as {
+        object: 'list';
+        data: ThreadMessage[];
+        has_more: boolean;
+        next_after_seq: number | null;
+        next_before_seq: number | null;
+      };
+    });
   },
 
-  /** POST /v1/threads/:id/messages — STREAMING with tools.
+  /** POST /v1/threads/:id/messages — STREAMING (when no tools) or
+   *  non-streaming (when tools attached, since qlaud doesn't allow
+   *  stream + tools together yet).
    *
-   *  Returns the raw upstream Response so the caller can pipe `body`
-   *  straight back to its own client without re-buffering. qlaud
-   *  multiplexes tool dispatch progress events into the SSE so the
-   *  customer UI can render the running/done state of each tool
-   *  inline as the loop iterates.
+   *  Returns the raw upstream Response so the chat handler can pipe
+   *  `body` straight back to its own client without re-buffering.
    */
   streamMessage: async (args: {
-    apiKey: string;
     threadId: string;
     body: Record<string, unknown>;
   }): Promise<Response> => {
     return fetch(`${BASE()}/v1/threads/${args.threadId}/messages`, {
       method: 'POST',
       headers: {
-        'x-api-key': args.apiKey,
+        'x-api-key': KEY(),
         'content-type': 'application/json',
       },
       body: JSON.stringify({ ...args.body, stream: true }),
     });
   },
 
-  /** GET /v1/search — semantic search across the caller's threads. */
-  search: async (args: {
-    apiKey: string;
-    query: string;
-    endUserId?: string;
-    threadId?: string;
-    limit?: number;
-  }) => {
-    const url = new URL(
-      args.threadId
-        ? `${BASE()}/v1/threads/${args.threadId}/search`
-        : `${BASE()}/v1/search`,
-    );
-    url.searchParams.set('q', args.query);
-    if (args.endUserId) url.searchParams.set('end_user_id', args.endUserId);
-    url.searchParams.set('limit', String(args.limit ?? 10));
-    const r = await fetch(url, { headers: { 'x-api-key': args.apiKey } });
-    if (!r.ok) throw new QlaudError(r.status, `search → ${r.status}`);
-    return (await r.json()) as { object: 'list'; query: string; data: SearchHit[] };
-  },
+  /** POST /v1/threads/:id/messages — non-streaming variant. Used when
+   *  tools are attached (qlaud streams + tools combo isn't supported). */
+  sendMessage: (args: {
+    threadId: string;
+    body: Record<string, unknown>;
+  }) =>
+    call<{
+      id: string;
+      role: 'assistant';
+      content: unknown[];
+      stop_reason: string;
+    }>(`/v1/threads/${args.threadId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    }),
 
-  /** DELETE /v1/keys/:id — revoke a per-user key. Master-scope only.
-   *  Idempotent: 404 on an already-deleted key is treated as success
-   *  so re-deliveries of user.deleted don't bounce the webhook. */
-  revokeKey: async (keyId: string) => {
-    const r = await fetch(`${BASE()}/v1/keys/${keyId}`, {
-      method: 'DELETE',
-      headers: { 'x-api-key': MASTER() },
-    });
-    if (r.ok || r.status === 404) return;
-    const text = await r.text().catch(() => '');
-    throw new QlaudError(r.status, `revokeKey → ${r.status}: ${text.slice(0, 200)}`);
-  },
-
-  /** POST /v1/tools — register a tool. Master-scope only. */
+  /** POST /v1/tools — register a tool. Used by scripts/register-tools.ts
+   *  after first deploy. */
   registerTool: (def: ToolDefinition) =>
     call<ToolRegisterResult>('/v1/tools', {
       method: 'POST',
       body: JSON.stringify(def),
     }),
 
-  /** GET /v1/tools — list registered tools. */
+  /** GET /v1/tools — list registered tools. Chat handler caches the ids
+   *  per worker boot. */
   listTools: () =>
     call<{ object: 'list'; data: Array<ToolRegisterResult> }>('/v1/tools'),
 };

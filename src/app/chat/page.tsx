@@ -1,65 +1,29 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
-import { ensureQlaudState } from '@/lib/user-state';
-import { qlaud } from '@/lib/qlaud';
+import { ChatShell } from '@/components/chat/chat-shell';
+import { getConfig } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-// /chat (no thread id) — picks the most recent thread for this user, or
-// creates a fresh one. Then redirects to /chat/[id]. Keeps the URL stable
-// for back-button navigation while the user only ever sees one chat at a
-// time.
-export default async function ChatRootPage() {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
+export const metadata = {
+  title: 'Chat — customerdog',
+};
 
-  // Provisions inline if Clerk metadata is empty — the webhook is just
-  // a cache-warm. If qlaud or Clerk is unreachable we fall through to
-  // the holding screen so the user has something to retry.
-  let state;
+/**
+ * Full-page chat for visitors. The thread/visitor cookies are managed
+ * server-side on the first POST to /api/chat — this page renders blank
+ * and lets the user type their first message.
+ *
+ * For embedding in a host page, use /embed (no header chrome) instead.
+ */
+export default async function ChatPage() {
+  let companyName = 'Support';
+  let brandColor: string | undefined;
   try {
-    state = await ensureQlaudState(userId);
-  } catch (e) {
-    console.error('[chat/page] ensureQlaudState failed:', e);
-    return <OnboardingPending />;
+    const cfg = await getConfig();
+    companyName = cfg.company_name;
+    brandColor = cfg.brand_color;
+  } catch {
+    // Supabase not reachable — render generic shell.
   }
 
-  const list = await qlaud.listThreads({
-    apiKey: state.qlaud_secret,
-    endUserId: userId,
-    limit: 1,
-  });
-
-  const latest = list.data[0];
-  if (latest) {
-    redirect(`/chat/${latest.id}`);
-  }
-
-  // No threads at all (newly seeded users have an initial one — but if
-  // someone deleted them all, fall back to creating a new one).
-  const fresh = await qlaud.createThread({
-    apiKey: state.qlaud_secret,
-    endUserId: userId,
-  });
-  redirect(`/chat/${fresh.id}`);
-}
-
-function OnboardingPending() {
-  return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="max-w-sm text-center">
-        <h1 className="text-xl font-semibold">Setting up your account…</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Provisioning your qlaud key + first conversation. This usually
-          takes a couple of seconds.
-        </p>
-        <a
-          href="/chat"
-          className="mt-4 inline-block text-sm text-primary hover:underline"
-        >
-          Refresh
-        </a>
-      </div>
-    </div>
-  );
+  return <ChatShell companyName={companyName} brandColor={brandColor} mode="page" />;
 }

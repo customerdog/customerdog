@@ -1,108 +1,93 @@
 import Link from 'next/link';
-import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { getConfig } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * Visitor landing. The real product surface is /chat (full-page chat)
+ * or the embeddable widget on the company's own site — this page is
+ * just a friendly entry point if someone navigates to the bare deploy
+ * URL.
+ *
+ * Reads the company name from the config row so each clone-and-deploy
+ * looks like the company's own product.
+ */
 export default async function LandingPage() {
-  // Already signed in? Skip the marketing page.
-  const { userId } = await auth();
-  if (userId) redirect('/chat');
+  let companyName = 'Your Company';
+  let configured = false;
+  try {
+    const cfg = await getConfig();
+    companyName = cfg.company_name;
+    configured = cfg.company_name !== 'Your Company';
+  } catch {
+    // Supabase not reachable yet — render generic landing so first-deploy
+    // visitors aren't greeted with a 500.
+  }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-12">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-12">
       <header className="flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
-          <Logo />
-          customerdog
-          <span className="ml-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-            demo
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-lg font-semibold"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+            🐕
           </span>
+          {companyName}
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <a
-            href="https://github.com/customerdog/customerdog"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/admin/login"
             className="text-muted-foreground hover:text-foreground"
           >
-            GitHub
-          </a>
-          <Link href="/sign-in" className="text-muted-foreground hover:text-foreground">
-            Sign in
-          </Link>
-          <Link
-            href="/sign-up"
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            Sign up
+            Admin
           </Link>
         </nav>
       </header>
 
-      <main className="flex flex-1 flex-col justify-center py-16">
+      <section className="flex flex-1 flex-col justify-center py-16">
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          Open-source AI chat,
-          <br />
-          built on{' '}
-          <a href="https://qlaud.ai" className="text-primary hover:underline">
-            qlaud
-          </a>
-          .
+          Hi! I&apos;m the {companyName} AI assistant.
         </h1>
         <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-          Per-user threads, tool integration via webhooks, semantic search,
-          streaming UX, per-user billing — everything a real chat product
-          needs. Fork the repo, swap three env-var sets, deploy.
+          Ask me anything about our product, policies, or your account. If I
+          can&apos;t resolve it, I&apos;ll help you reach a human.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Link
-            href="/sign-up"
+            href="/chat"
             className="rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Try the demo →
+            Start a chat →
           </Link>
-          <a
-            href="https://github.com/customerdog/customerdog"
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md border border-border px-5 py-3 text-sm font-medium hover:border-primary/40"
-          >
-            View source on GitHub
-          </a>
         </div>
 
-        <ul className="mt-12 grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
-          <Feature title="Threads" detail="qlaud loads conversation history server-side." />
-          <Feature title="Tools" detail="Webhook URL → qlaud handles the dispatch loop." />
-          <Feature title="Search" detail="Semantic search across every past conversation." />
-          <Feature title="Streaming" detail="Token-by-token reveal, persisted on close." />
-        </ul>
+        {!configured ? (
+          <p className="mt-12 max-w-xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Setup not finished:</strong> sign in at{' '}
+            <Link href="/admin/login" className="underline">
+              /admin/login
+            </Link>{' '}
+            and add some knowledge base sources at <code>/admin/kb</code>{' '}
+            — the AI has nothing to answer from yet.
+          </p>
+        ) : null}
+      </section>
 
-        <p className="mt-12 text-xs text-muted-foreground">
-          Built with Next.js, Clerk, and qlaud. MIT licensed.
-        </p>
-      </main>
-    </div>
-  );
-}
-
-function Feature({ title, detail }: { title: string; detail: string }) {
-  return (
-    <li className="rounded-lg border border-border p-3">
-      <div className="font-medium text-foreground">{title}</div>
-      <div>{detail}</div>
-    </li>
-  );
-}
-
-function Logo() {
-  // Dark square + white "q" + red dot accent, matching qlaud's monogram.
-  return (
-    <span
-      className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-foreground text-[12px] font-bold text-background"
-      aria-hidden
-    >
-      q<span className="text-primary">.</span>
-    </span>
+      <footer className="mt-auto pt-12 text-xs text-muted-foreground">
+        Powered by{' '}
+        <a
+          href="https://github.com/customerdog/customerdog"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          customerdog
+        </a>{' '}
+        · Open source
+      </footer>
+    </main>
   );
 }
