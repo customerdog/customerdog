@@ -38,27 +38,27 @@ export default function AdminDashboardPage() {
         <AdminCard
           href="/admin/kb"
           title="Knowledge base"
-          detail="Coming next: paste docs URLs or markdown the AI will learn from."
+          detail="Paste docs URLs or markdown the AI learns from."
         />
         <AdminCard
           href="/admin/conversations"
           title="Conversations"
-          detail="Coming next: browse past visitor sessions and read transcripts."
+          detail="Browse past visitor sessions and read transcripts."
         />
         <AdminCard
           href="/admin/activity"
           title="Activity log"
-          detail="Coming next: every email sent, ticket filed, contact captured."
+          detail="Every email sent, ticket filed, contact captured."
         />
         <AdminCard
           href="/admin/settings"
           title="Settings"
-          detail="Coming next: brand color, escalation destination, contact policy."
+          detail="Brand color, escalation destination, contact policy."
         />
         <AdminCard
           href="/admin/embed"
           title="Embed widget"
-          detail="Coming next: copy the <script> snippet for your site."
+          detail="Copy the script snippet to add the chat to your site."
         />
       </nav>
     </main>
