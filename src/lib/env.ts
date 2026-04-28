@@ -5,8 +5,9 @@ import 'server-only';
  *  .env.example one-for-one — keep both in sync.
  *
  *  SECURITY: server-only — every getter exposes a secret (qlaud master
- *  key, Clerk webhook secret, tool HMAC secrets). Client code that
- *  needs a public value should read process.env.NEXT_PUBLIC_… directly. */
+ *  key, Clerk webhook secret, Supabase service-role key, admin cookie
+ *  signing key). Client code that needs a public value should read
+ *  process.env.NEXT_PUBLIC_… directly. */
 
 const required = (name: string): string => {
   const v = process.env[name];
@@ -24,7 +25,7 @@ export const env = {
   // Public — readable by both client + server bundles.
   NEXT_PUBLIC_APP_URL: () => required('NEXT_PUBLIC_APP_URL'),
 
-  // Clerk
+  // Clerk (still required while chat routes use Clerk; commit 3 removes)
   CLERK_WEBHOOK_SECRET: () => required('CLERK_WEBHOOK_SECRET'),
 
   // qlaud
@@ -37,4 +38,14 @@ export const env = {
   QLAUD_TOOL_SECRET_WEB_SEARCH: () => optional('QLAUD_TOOL_SECRET_WEB_SEARCH'),
   QLAUD_TOOL_SECRET_GENERATE_IMAGE: () =>
     optional('QLAUD_TOOL_SECRET_GENERATE_IMAGE'),
+
+  // Supabase — Project Settings → API. Service-role key bypasses RLS;
+  // the schema intentionally has no RLS policies (server-only access).
+  SUPABASE_URL: () => required('SUPABASE_URL'),
+  SUPABASE_SERVICE_ROLE_KEY: () => required('SUPABASE_SERVICE_ROLE_KEY'),
+
+  // Admin gate — single shared password + cookie signing key.
+  // Generate strong values: `openssl rand -base64 32` for both.
+  ADMIN_PASSWORD: () => required('ADMIN_PASSWORD'),
+  ADMIN_COOKIE_SECRET: () => required('ADMIN_COOKIE_SECRET'),
 };
