@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { verifyToolWebhook } from '@/lib/tools/verify-signature';
 import { sendTicket } from '@/lib/destinations';
 import { findConversationByThread, logAction, recordContactCollected } from '@/lib/activity';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getConfig } from '@/lib/supabase';
 import { env } from '@/lib/env';
 
@@ -97,6 +98,23 @@ export async function POST(req: Request) {
       output: `I can't file this ticket yet — our policy requires collecting visitor contact info first (${required}). Ask the visitor for it, then call create_ticket again with the contact field populated.`,
       is_error: true,
     });
+  }
+
+  // Rate limit per conversation — the abuse case is an injected prompt
+  // looping inside one conversation. Skipped if we couldn't find the
+  // conversation row (rare; logging issue, fail open).
+  if (conversation) {
+    const limit = await checkRateLimit({
+      conversationId: conversation.id,
+      type: 'ticket_created',
+      ...RATE_LIMITS.ticket_created,
+    });
+    if (!limit.ok) {
+      return NextResponse.json({
+        output: `I've already filed ${limit.count} ticket${limit.count === 1 ? '' : 's'} for this conversation in the last hour. Tell the visitor our team will follow up on the existing ticket(s) — there's no need to file another. If they have new info to add, ask them to reply to whichever email they get from support.`,
+        is_error: true,
+      });
+    }
   }
 
   // Persist any collected contact onto the conversation row + log it.

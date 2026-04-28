@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { verifyToolWebhook } from '@/lib/tools/verify-signature';
 import { sendEmail } from '@/lib/destinations/email';
 import { findConversationByThread, logAction } from '@/lib/activity';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getConfig } from '@/lib/supabase';
 import { env } from '@/lib/env';
 
@@ -94,6 +95,22 @@ export async function POST(req: Request) {
         "I can't send this email yet — I haven't collected the visitor's email address. Ask the visitor for their email so I can include them on the message, then call this tool again.",
       is_error: true,
     });
+  }
+
+  // Rate limit per conversation. Caps prompt-injected email loops at
+  // RATE_LIMITS.email_sent.max per hour.
+  if (conversation) {
+    const limit = await checkRateLimit({
+      conversationId: conversation.id,
+      type: 'email_sent',
+      ...RATE_LIMITS.email_sent,
+    });
+    if (!limit.ok) {
+      return NextResponse.json({
+        output: `I've already sent ${limit.count} email${limit.count === 1 ? '' : 's'} for this conversation in the last hour. The visitor has the recap; tell them to check their inbox (including spam) before we send another.`,
+        is_error: true,
+      });
+    }
   }
 
   let resultId: string;
