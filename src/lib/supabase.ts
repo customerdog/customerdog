@@ -13,25 +13,29 @@ import { env } from './env';
  * API route that takes arbitrary `from('table').select()` from a query
  * string.
  *
+ * Typing approach: we don't pass a generated Database<> generic to
+ * createClient (the supabase-js v2.105+ shape requires extra
+ * boilerplate that adds nothing for a 4-table schema). Instead each
+ * query returns the loose default types and callers cast the Row[]
+ * payload to the exported row types below.
+ *
  * Lazy: client is built on first import. Env is read once and cached.
  */
 
-let client: SupabaseClient<Database> | null = null;
+let client: SupabaseClient | null = null;
 
-export function supabase(): SupabaseClient<Database> {
+export function supabase(): SupabaseClient {
   if (!client) {
-    client = createClient<Database>(
-      env.SUPABASE_URL(),
-      env.SUPABASE_SERVICE_ROLE_KEY(),
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+    client = createClient(env.SUPABASE_URL(), env.SUPABASE_SERVICE_ROLE_KEY(), {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
   return client;
 }
 
 // ─── Row types ─────────────────────────────────────────────────────────
 // Hand-typed mirrors of supabase/schema.sql. If you add a column over
-// there, mirror it here so the typed client picks it up.
+// there, mirror it here so callers cast to the right shape.
 
 export type ConfigRow = {
   id: 1;
@@ -74,26 +78,15 @@ export type ActionRow = {
   created_at: string;
 };
 
-type Database = {
-  public: {
-    Tables: {
-      config: { Row: ConfigRow; Insert: Partial<ConfigRow> & { id: 1 }; Update: Partial<ConfigRow> };
-      kb_sources: { Row: KbSourceRow; Insert: Partial<KbSourceRow> & Pick<KbSourceRow, 'type' | 'source' | 'parsed_content'>; Update: Partial<KbSourceRow> };
-      conversations: { Row: ConversationRow; Insert: Partial<ConversationRow> & Pick<ConversationRow, 'anon_visitor_id' | 'qlaud_thread_id'>; Update: Partial<ConversationRow> };
-      actions: { Row: ActionRow; Insert: Partial<ActionRow> & Pick<ActionRow, 'type' | 'payload'>; Update: Partial<ActionRow> };
-    };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
-  };
-};
-
 // ─── Convenience helpers used across admin + chat handlers ─────────────
 
 /** Read the single config row. Throws if missing (the schema seeds it). */
 export async function getConfig(): Promise<ConfigRow> {
-  const { data, error } = await supabase().from('config').select('*').eq('id', 1).single();
+  const { data, error } = await supabase()
+    .from('config')
+    .select('*')
+    .eq('id', 1)
+    .single();
   if (error) throw new Error(`getConfig: ${error.message}`);
-  return data;
+  return data as ConfigRow;
 }
