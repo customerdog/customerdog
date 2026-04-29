@@ -163,26 +163,11 @@ export async function POST(req: Request) {
     ...(tools.length > 0 ? { tools } : {}),
   };
 
-  // qlaud's docs: streaming + tools is not supported. With tools,
-  // call non-streaming and shape the response into a one-shot
-  // SSE-like envelope so the client UI doesn't need a second branch.
-  if (tools.length > 0) {
-    try {
-      const result = await qlaud.sendMessage({ threadId, body: requestBody });
-      return NextResponse.json(result);
-    } catch (e) {
-      const status = e instanceof QlaudError ? errStatus(e.status) : 502;
-      return NextResponse.json(
-        {
-          error: 'upstream failed',
-          detail: e instanceof Error ? e.message : String(e),
-        },
-        { status },
-      );
-    }
-  }
-
-  // Toolless path: stream SSE straight through.
+  // Always try streaming first. qlaud accepts `stream: true` with
+  // tools attached on newer accounts; if this account / endpoint
+  // version still rejects the combo with a 400 ("streaming + tools
+  // combo"), we fall back to a single-shot non-streaming call. The
+  // chat client (input-bar.tsx) handles both content-types.
   let upstream: Response;
   try {
     upstream = await qlaud.streamMessage({ threadId, body: requestBody });
@@ -194,18 +179,54 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!upstream.ok || !upstream.body) {
-    const text = await upstream.text().catch(() => '');
+  // Fall-back path: qlaud rejected stream + tools.
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => '');
+    const looksLikeStreamToolsBlock =
+      upstream.status === 400 &&
+      tools.length > 0 &&
+      /stream/i.test(detail) &&
+      /tool/i.test(detail);
+
+    if (looksLikeStreamToolsBlock) {
+      try {
+        const result = await qlaud.sendMessage({
+          threadId,
+          body: requestBody,
+        });
+        return NextResponse.json(result);
+      } catch (e) {
+        const status = e instanceof QlaudError ? errStatus(e.status) : 502;
+        return NextResponse.json(
+          {
+            error: 'upstream failed',
+            detail: e instanceof Error ? e.message : String(e),
+          },
+          { status },
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: `upstream ${upstream.status}`, detail: text.slice(0, 500) },
+      { error: `upstream ${upstream.status}`, detail: detail.slice(0, 500) },
       { status: errStatus(upstream.status) },
     );
   }
 
+  if (!upstream.body) {
+    return NextResponse.json(
+      { error: 'upstream returned empty body' },
+      { status: 502 },
+    );
+  }
+
+  // qlaud accepted streaming. Pass it through verbatim — including
+  // any tool_dispatch_* events the client already knows how to render.
   return new Response(upstream.body, {
     status: 200,
     headers: {
-      'content-type': 'text/event-stream',
+      'content-type':
+        upstream.headers.get('content-type') ?? 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
       'x-qlaud-thread-id':
         upstream.headers.get('x-qlaud-thread-id') ?? threadId,
