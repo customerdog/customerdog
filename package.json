@@ -9,8 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check": "node --env-file=.env.local --import tsx scripts/check-env.ts",
-    "register-tools": "node --env-file=.env.local --import tsx scripts/register-tools.ts"
+    "check": "node --env-file-if-exists=.env.local --import tsx scripts/check-env.ts",
+    "register-tools": "node --env-file-if-exists=.env.local --import tsx scripts/register-tools.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
