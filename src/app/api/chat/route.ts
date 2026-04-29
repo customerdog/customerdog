@@ -11,6 +11,12 @@ import { supabase } from '@/lib/supabase';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Vercel-specific: bump the function timeout. Hobby caps at 10s anyway;
+// Pro/Enterprise honor this. A typical visitor turn finishes in 2-5s,
+// but tool-loop iterations can stack: 8 iterations × 3s LLM call +
+// ticket-destination round-trip = up to ~30s.
+export const maxDuration = 60;
+
 // In-memory cache of the deployment's registered tool ids. Pulled once
 // per worker boot and reused — listing on every request would be
 // wasteful and the set rarely changes (rotation requires a redeploy).
