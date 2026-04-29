@@ -62,7 +62,7 @@ Sign in at [supabase.com](https://supabase.com) → **New project** (the free ti
 - **SQL Editor → New query →** paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
 - **Project Settings → API →** copy these two values, you'll need them in step 4:
   - `Project URL` → `SUPABASE_URL`
-  - `service_role` secret (NOT the anon key) → `SUPABASE_SERVICE_ROLE_KEY`
+  - **Secret key** (sometimes still labelled `service_role`) → `SUPABASE_SERVICE_ROLE_KEY`. **NOT the Publishable / `anon` key** — they look almost identical (both are `eyJ…` JWTs), but the publishable one is gated by Row-Level Security and won't have permission to read the tables we ship.
 
 ### 3. Mint a qlaud key
 
