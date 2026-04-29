@@ -142,11 +142,27 @@ export async function POST(req: Request) {
       priority: input.priority,
       visitorId: payload.end_user_id ?? 'unknown',
       threadId: payload.thread_id,
+      // Use the operator's configured support_email as the destination
+      // when ticket_destination='email' and they haven't also set the
+      // TICKET_EMAIL_TO env var. One config field, two purposes.
+      fallbackEmail: config.support_email,
     });
     resultUrl = r.resultUrl;
   } catch (e) {
+    // Log the actual error for the operator (Vercel function logs);
+    // give qlaud / the AI a sanitized message that never leaks env-
+    // var names or internal config to the visitor.
+    console.error(
+      '[create-ticket] dispatch to',
+      config.ticket_destination,
+      'failed:',
+      (e as Error).message,
+    );
+    const supportLine = config.support_email
+      ? ` Please reach us directly at ${config.support_email} and we'll follow up.`
+      : '';
     return NextResponse.json({
-      output: `I couldn't file the ticket: ${(e as Error).message}. Please try again later or contact us directly at ${config.support_email ?? '(no support email configured)'}.`,
+      output: `I couldn't file the ticket right now — there's a configuration issue with our support pipeline.${supportLine} Tell the visitor we'll be in touch.`,
       is_error: true,
     });
   }

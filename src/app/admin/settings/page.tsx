@@ -17,6 +17,7 @@ export default async function AdminSettingsPage({
   await requireSetup();
   const sp = await searchParams;
   const cfg = await getConfig();
+  const destWarnings = checkDestinationConfig(cfg.ticket_destination, cfg.support_email);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 space-y-8">
@@ -36,6 +37,21 @@ export default async function AdminSettingsPage({
 
       {sp.saved ? <Banner kind="ok">Saved.</Banner> : null}
       {sp.error ? <Banner kind="error">{sp.error}</Banner> : null}
+
+      {destWarnings.length > 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Ticket destination not fully configured</p>
+          <p className="mt-1 text-xs">
+            The AI will hit a runtime error when it tries to file a ticket.
+            Fix one of the following:
+          </p>
+          <ul className="mt-2 ml-5 list-disc space-y-1 text-xs">
+            {destWarnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <form action={saveSettingsAction} className="space-y-5">
         <Field
@@ -211,4 +227,54 @@ function Banner({
       {children}
     </div>
   );
+}
+
+/** Check that the env vars + config required by the chosen ticket
+ *  destination are actually present. Returns a list of fix-it
+ *  suggestions for a banner. Empty list = all good. */
+function checkDestinationConfig(
+  destination: 'email' | 'slack' | 'linear' | 'zendesk',
+  supportEmail: string | null,
+): string[] {
+  switch (destination) {
+    case 'email':
+      // Either TICKET_EMAIL_TO or support_email needs to resolve.
+      if (!process.env.TICKET_EMAIL_TO && !supportEmail) {
+        return [
+          'Set Support email above (used as the ticket destination), OR set TICKET_EMAIL_TO in your hosting env vars.',
+          'Also set RESEND_API_KEY in env if you haven\u2019t — Resend sends the email.',
+        ];
+      }
+      if (!process.env.RESEND_API_KEY) {
+        return [
+          'Set RESEND_API_KEY in env (Vercel \u2192 Settings \u2192 Environment Variables). Get a key at resend.com.',
+        ];
+      }
+      return [];
+    case 'slack':
+      if (!process.env.SLACK_WEBHOOK_URL) {
+        return [
+          'Set SLACK_WEBHOOK_URL in env. Create one in Slack: Apps \u2192 Incoming Webhooks \u2192 add to channel.',
+        ];
+      }
+      return [];
+    case 'linear':
+      if (!process.env.LINEAR_API_KEY || !process.env.LINEAR_TEAM_ID) {
+        return [
+          'Set LINEAR_API_KEY (Linear \u2192 Settings \u2192 API \u2192 Personal API keys) and LINEAR_TEAM_ID (visible in your team\u2019s URL).',
+        ];
+      }
+      return [];
+    case 'zendesk':
+      if (
+        !process.env.ZENDESK_SUBDOMAIN ||
+        !process.env.ZENDESK_EMAIL ||
+        !process.env.ZENDESK_API_TOKEN
+      ) {
+        return [
+          'Set ZENDESK_SUBDOMAIN, ZENDESK_EMAIL, and ZENDESK_API_TOKEN in env.',
+        ];
+      }
+      return [];
+  }
 }

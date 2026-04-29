@@ -128,8 +128,12 @@ export async function POST(req: Request) {
     });
     resultId = r.id;
   } catch (e) {
+    // Log the real error for the operator; give the AI a sanitized
+    // message that never leaks env-var names to the visitor.
+    console.error('[send-email] failed:', (e as Error).message);
     return NextResponse.json({
-      output: `Failed to send email: ${(e as Error).message}.`,
+      output:
+        "I couldn't send the email right now due to a temporary issue. Tell the visitor we noted their request and will follow up another way.",
       is_error: true,
     });
   }

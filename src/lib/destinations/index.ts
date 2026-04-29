@@ -15,10 +15,13 @@ export async function sendTicket(
 ): Promise<TicketResult> {
   switch (destination) {
     case 'email': {
-      const to = env.TICKET_EMAIL_TO();
+      // Prefer explicit env override, fall back to config.support_email
+      // (passed by the route handler). Operators who already set
+      // support_email in /admin/settings don't need a second env var.
+      const to = env.TICKET_EMAIL_TO() ?? args.fallbackEmail ?? null;
       if (!to) {
         throw new Error(
-          'TICKET_EMAIL_TO is not set — cannot file an email ticket. Set it in env or change ticket_destination.',
+          'No ticket email address configured. Set support_email in /admin/settings (or TICKET_EMAIL_TO in env) to enable email tickets.',
         );
       }
       const replyTo = args.contact.email ?? undefined;
