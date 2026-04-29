@@ -5,6 +5,18 @@
 
 🐕 Live demo: [your-deploy.vercel.app](#) · 📖 [Architecture](docs/ARCHITECTURE.md) · 🗺 [Roadmap](docs/PLAN.md)
 
+## One-click deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20console.qlaud.ai%20%28admin%20scope%29.%20SUPABASE_*%20from%20Project%20Settings%20%E2%86%92%20API.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
+
+The button opens Vercel's import flow with all six required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Then run `npm run register-tools` locally to wire up the escalation tools (see below).
+
+**Before you click the button, you'll need:**
+
+1. **A free Supabase project.** Create at [supabase.com](https://supabase.com) → open SQL Editor → paste & run [`supabase/schema.sql`](supabase/schema.sql). Copy `URL` + `service_role` key from Project Settings → API.
+2. **A qlaud key** with admin scope from [console.qlaud.ai/keys](https://console.qlaud.ai/keys).
+3. **Two random secrets** for the admin cookie + password: run `openssl rand -base64 32` twice.
+
 ---
 
 ## What you get
@@ -31,62 +43,103 @@
 | Tickets | Email / Slack / Linear / Zendesk (admin picks one) |
 | Widget | Plain `<script>` + iframe + postMessage (no build step on host site) |
 
-## Setup (~15 minutes from scratch)
+## Setup, step by step
+
+Each step is a single block to copy-paste. Run them in order. ~15 minutes from scratch.
+
+### 1. Clone + install
 
 ```bash
-# 1. Clone + install
 git clone https://github.com/customerdog/customerdog.git
 cd customerdog
 npm install
+```
 
-# 2. Supabase: create a free project at supabase.com → SQL Editor →
-#    paste the contents of supabase/schema.sql → Run.
-#    Then Project Settings → API → copy the URL + service_role key.
+### 2. Create the Supabase project + run the schema
 
-# 3. qlaud: create a key at console.qlaud.ai/keys with admin scope
-#    (admin scope is needed to register tools).
+Sign in at [supabase.com](https://supabase.com) → **New project** (the free tier is enough for ~10K conversations). Once it's ready:
 
-# 4. Env
+- **SQL Editor → New query →** paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
+- **Project Settings → API →** copy these two values, you'll need them in step 4:
+  - `Project URL` → `SUPABASE_URL`
+  - `service_role` secret (NOT the anon key) → `SUPABASE_SERVICE_ROLE_KEY`
+
+### 3. Mint a qlaud key
+
+Sign in at [console.qlaud.ai/keys](https://console.qlaud.ai/keys) → **Create key** with **scope = admin** (admin scope is required to register tools). Copy the `qlk_live_…` value — you'll need it in step 4.
+
+### 4. Local env vars
+
+```bash
 cp .env.example .env.local
-# Fill in QLAUD_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-# ADMIN_PASSWORD (openssl rand -base64 32),
-# ADMIN_COOKIE_SECRET (openssl rand -base64 32),
-# NEXT_PUBLIC_APP_URL (http://localhost:3000 for dev).
-
-# 5. Verify env actually works (live probes)
-npm run check
-
-# 6. Dev
-npm run dev
-# → http://localhost:3000           — visitor landing
-# → http://localhost:3000/chat      — full-page chat
-# → http://localhost:3000/admin     — admin (sign in with ADMIN_PASSWORD)
 ```
 
-### Production deploy
-
-Deploy anywhere Next.js runs. Vercel is the smoothest:
+Now open `.env.local` and paste in the six required values. The two `ADMIN_*` vars want strong random strings — run these and paste each output into the matching slot:
 
 ```bash
-vercel deploy
-# Vercel reads the same env vars; set them in the project's
-# Environment Variables before deploying. Update NEXT_PUBLIC_APP_URL
-# to the production URL (e.g. https://support.yourcompany.com).
+openssl rand -base64 32   # → ADMIN_PASSWORD
+openssl rand -base64 32   # → ADMIN_COOKIE_SECRET
 ```
 
-After your first deploy, **register the escalation tools with qlaud**:
+Final `.env.local` should look like:
+
+```
+QLAUD_KEY=qlk_live_…                          # from step 3
+SUPABASE_URL=https://xxx.supabase.co          # from step 2
+SUPABASE_SERVICE_ROLE_KEY=eyJ…                # from step 2
+ADMIN_PASSWORD=…                              # openssl rand -base64 32
+ADMIN_COOKIE_SECRET=…                         # openssl rand -base64 32
+NEXT_PUBLIC_APP_URL=http://localhost:3000     # change to deploy URL after step 6
+```
+
+### 5. Verify locally
 
 ```bash
+npm run check    # live-probes Supabase + qlaud, shows what's missing
+npm run dev      # → http://localhost:3000
+```
+
+Open `http://localhost:3000/admin/login`, sign in with your `ADMIN_PASSWORD`, paste a docs URL at `/admin/kb`, then test the chat at `/chat`.
+
+### 6. Deploy
+
+**One-click via the button at the top of this README** — Vercel walks you through entering all six env vars. After it deploys, come back and:
+
+- Update `NEXT_PUBLIC_APP_URL` in Vercel → Settings → Environment Variables to the real deploy URL (e.g., `https://support.yourcompany.com`)
+- Redeploy
+
+**Or any other Next.js host** — Railway, Fly.io, Cloudflare Pages with the Workers adapter, your own VPS. Set the same six env vars in the host's environment configuration, then `npm run build` + `npm run start`. No Vercel-specific code anywhere in the repo.
+
+### 7. Register the escalation tools with qlaud
+
+This step happens once after your first deploy so the tool webhook URLs point at your live host:
+
+```bash
+# Update NEXT_PUBLIC_APP_URL in .env.local first to match the deployed URL.
 npm run register-tools
-# Prints: QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
-#         QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
-# Paste both back into env, redeploy.
 ```
 
-Now open `https://your-deploy/admin/login`, sign in, and:
-1. **`/admin/kb`** — paste your docs URL or markdown. The AI starts answering from it immediately.
-2. **`/admin/settings`** — pick your ticket destination (email/Slack/Linear/Zendesk) and set the matching env vars.
-3. **`/admin/embed`** — copy the `<script>` snippet onto your site, OR send visitors directly to `https://your-deploy/chat`.
+Output:
+
+```
+✓ create_ticket          → tool_…
+✓ send_email_to_user     → tool_…
+
+Done. Add these to your env (Vercel → Settings → Environment Variables, then redeploy):
+
+QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
+QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
+```
+
+Paste both into your hosting env vars and redeploy.
+
+### 8. Configure the agent
+
+Open `https://your-deploy/admin/login` and:
+
+1. **`/admin/settings`** — set company name, brand color, ticket destination (email/Slack/Linear/Zendesk), visitor contact policy.
+2. **`/admin/kb`** — paste your docs URL (server fetches + parses) or raw markdown. The AI starts answering from it on the next chat turn.
+3. **`/admin/embed`** — copy the `<script>` snippet onto your site, or just point visitors to `https://your-deploy/chat`.
 
 ## Three ways visitors find you
 
