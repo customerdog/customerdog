@@ -22,31 +22,45 @@ import { ensureToolsRegistered } from './tool-register';
  * Other Supabase errors (auth, network) fall through to /admin/error.tsx.
  */
 
-// Update this when adding a new table to schema.sql so requireSchema's
-// probe always targets the most recently introduced table.
-const LATEST_TABLE = 'tool_registrations';
+// Update this when adding a new table to schema.sql so the schema probe
+// always targets the most recently introduced table. Two callers depend
+// on it: requireSchema (gates admin pages) AND /admin/setup (decides
+// whether to redirect back to /admin). They MUST agree, otherwise an
+// upgrade where this latest table is missing creates a redirect loop:
+//
+//   /admin           — requireSchema probes LATEST_TABLE → missing →
+//                      auto-migrate fails → redirect /admin/setup
+//   /admin/setup     — checks LATEST_TABLE → also missing → renders
+//                      the setup UI (does NOT redirect back to /admin)
+//
+// If /admin/setup were checking a DIFFERENT table (e.g., the original
+// `config`), an old deploy with config-but-not-LATEST_TABLE would loop
+// forever between the two routes.
+export const LATEST_TABLE = 'tool_registrations';
 
-export async function requireSchema(): Promise<void> {
+/** True if the deploy's database has every table in schema.sql,
+ *  inferred by probing the most recently added one. False if any
+ *  schema-related error fires; rethrows on auth/network failures. */
+export async function isSchemaCurrent(): Promise<boolean> {
   const probe = await supabase()
     .from(LATEST_TABLE)
     .select('name')
     .limit(1);
+  if (!probe.error) return true;
+  if (isSchemaMissing(probe.error)) return false;
+  // Some other Supabase error — let admin/error.tsx classify it.
+  throw new Error(probeErrorMessage(probe.error));
+}
 
-  if (!probe.error) return; // schema is current
-
-  if (!isSchemaMissing(probe.error)) {
-    // Auth / network / something else — admin/error.tsx will surface.
-    throw new Error(probeErrorMessage(probe.error));
-  }
+export async function requireSchema(): Promise<void> {
+  if (await isSchemaCurrent()) return;
 
   // Schema missing or outdated — try auto-migrate.
   const migrated = await tryAutoMigrate();
   if (migrated) {
-    // Verify the migration did what we expected.
-    const verify = await supabase().from(LATEST_TABLE).select('name').limit(1);
-    if (!verify.error) return;
+    if (await isSchemaCurrent()) return;
     throw new Error(
-      `Migration ran, but ${LATEST_TABLE} still isn't readable: ${probeErrorMessage(verify.error)}`,
+      `Migration ran, but ${LATEST_TABLE} still isn't readable. Check Vercel logs for the auto-migrate output.`,
     );
   }
 

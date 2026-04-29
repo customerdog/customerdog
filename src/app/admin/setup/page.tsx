@@ -2,9 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CopySqlBlock } from './copy-sql';
 import { getSchemaSql } from '@/lib/schema-sql';
-import { getSupabaseSqlEditorUrl, isSchemaMissing } from '@/lib/admin-guard';
-import { getLastMigrationError } from '@/lib/auto-migrate';
-import { getConfig } from '@/lib/supabase';
+import { getSupabaseSqlEditorUrl, isSchemaCurrent } from '@/lib/admin-guard';
+import { getLastMigrationError, tryAutoMigrate } from '@/lib/auto-migrate';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,19 +21,20 @@ export const metadata = {
  * page can't be reached after the fact.
  */
 export default async function AdminSetupPage() {
-  let schemaInstalled = false;
-  try {
-    await getConfig();
-    schemaInstalled = true;
-  } catch (e) {
-    if (!isSchemaMissing(e)) {
-      // Some other failure (auth, network) — let the error boundary
-      // handle it instead of pretending setup is the issue.
-      throw e;
-    }
-  }
+  // Step 1 — schema already current? Bounce back to /admin.
+  // CRITICAL: this MUST use the same probe requireSchema uses
+  // (the LATEST_TABLE in admin-guard.ts), or we get a redirect loop:
+  // /admin sees the latest table missing → redirects here →
+  // here sees an OLDER table and thinks schema is fine → redirects
+  // back to /admin → … too many redirects.
+  if (await isSchemaCurrent()) redirect('/admin');
 
-  if (schemaInstalled) redirect('/admin');
+  // Step 2 — self-heal via auto-migrate. If it works, schema is current
+  // and /admin will render. If it fails (no DATABASE_URL, wrong pooler,
+  // etc.) we fall through to the manual click-to-install UI below,
+  // with the migration error displayed in an amber banner.
+  const autoMigrated = await tryAutoMigrate();
+  if (autoMigrated && (await isSchemaCurrent())) redirect('/admin');
 
   const sql = getSchemaSql();
   const sqlEditorUrl = getSupabaseSqlEditorUrl();
