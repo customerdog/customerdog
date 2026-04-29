@@ -98,6 +98,39 @@ export function InputBar({
       return;
     }
 
+    // Two response shapes from /api/chat:
+    //   - SSE (text/event-stream): when no tools are attached, qlaud
+    //     supports streaming and we forward it verbatim.
+    //   - JSON (application/json): when tools ARE attached, qlaud
+    //     can't stream + tool, so /api/chat returns the final
+    //     assistant message in one body. We render it as a single
+    //     synthetic "iteration 1" snapshot below — same UI shape as
+    //     the streaming path, just no per-token reveal.
+    const contentType = res.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      try {
+        const result = (await res.json()) as {
+          role?: string;
+          content?: unknown;
+          stop_reason?: string;
+          usage?: unknown;
+        };
+        onAssistantUpdate({
+          seq: seqForIteration(1),
+          role: 'assistant',
+          content: result.content ?? [],
+          request_id: null,
+          created_at: Date.now(),
+        });
+      } catch (e) {
+        onAssistantUpdate(
+          errorMessage(`failed to parse response: ${(e as Error).message}`, 1),
+        );
+      }
+      onTurnEnd();
+      return;
+    }
+
     // Per-iteration accumulator state. Each iteration starts fresh
     // (block indexes reset on every message_start from upstream).
     type Block =
