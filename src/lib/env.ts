@@ -69,6 +69,16 @@ export const env = {
   // email tickets. Get an API key at resend.com.
   RESEND_API_KEY: () => optional('RESEND_API_KEY'),
 
+  // Optional sender override for Resend. Without it, customerdog sends
+  // FROM Resend's shared "onboarding@resend.dev" address (works for
+  // anyone, but may land in spam and looks unbranded). To use a real
+  // sender like support@yourcompany.com:
+  //   1. Verify the domain at resend.com → Domains (drop the SPF /
+  //      DKIM / MX DNS records into your DNS host).
+  //   2. Set this env to "Your Company <support@yourcompany.com>"
+  //      OR just "support@yourcompany.com".
+  RESEND_FROM_EMAIL: () => optional('RESEND_FROM_EMAIL'),
+
   // Firecrawl — optional. When set, KB ingestion routes URL fetches
   // through Firecrawl's /v1/scrape endpoint, which renders pages in
   // a real browser server-side. Use this if your sources are

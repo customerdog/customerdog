@@ -21,7 +21,11 @@ export type EmailSendArgs = {
 export type EmailSendResult = { id: string };
 
 const RESEND_API = 'https://api.resend.com/emails';
-const DEFAULT_FROM = 'customerdog <onboarding@resend.dev>';
+
+// Resend's shared verified sender — works for any account without
+// domain validation. Operators who want their own domain set
+// RESEND_FROM_EMAIL after verifying at resend.com → Domains.
+const FALLBACK_FROM = 'customerdog <onboarding@resend.dev>';
 
 export async function sendEmail(args: EmailSendArgs): Promise<EmailSendResult> {
   const apiKey = env.RESEND_API_KEY();
@@ -31,6 +35,13 @@ export async function sendEmail(args: EmailSendArgs): Promise<EmailSendResult> {
     );
   }
 
+  // Sender resolution: explicit per-call > env override > shared
+  // verified default. Lets `send_email_to_user` and `create_ticket`
+  // both honor the operator's RESEND_FROM_EMAIL if set, while still
+  // working out-of-the-box for new deploys that haven't verified
+  // a domain yet.
+  const from = args.from ?? env.RESEND_FROM_EMAIL() ?? FALLBACK_FROM;
+
   const res = await fetch(RESEND_API, {
     method: 'POST',
     headers: {
@@ -38,7 +49,7 @@ export async function sendEmail(args: EmailSendArgs): Promise<EmailSendResult> {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      from: args.from ?? DEFAULT_FROM,
+      from,
       to: [args.to],
       subject: args.subject,
       text: args.text,

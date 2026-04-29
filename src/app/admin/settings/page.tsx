@@ -237,20 +237,27 @@ function checkDestinationConfig(
   supportEmail: string | null,
 ): string[] {
   switch (destination) {
-    case 'email':
+    case 'email': {
+      const warnings: string[] = [];
       // Either TICKET_EMAIL_TO or support_email needs to resolve.
       if (!process.env.TICKET_EMAIL_TO && !supportEmail) {
-        return [
+        warnings.push(
           'Set Support email above (used as the ticket destination), OR set TICKET_EMAIL_TO in your hosting env vars.',
-          'Also set RESEND_API_KEY in env if you haven\u2019t — Resend sends the email.',
-        ];
+        );
       }
       if (!process.env.RESEND_API_KEY) {
-        return [
+        warnings.push(
           'Set RESEND_API_KEY in env (Vercel \u2192 Settings \u2192 Environment Variables). Get a key at resend.com.',
-        ];
+        );
       }
-      return [];
+      // Sender note. NOT a blocking warning — the default works.
+      if (process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
+        warnings.push(
+          'Optional: emails currently send FROM "onboarding@resend.dev" (Resend\u2019s shared sender). To send from your own domain (e.g. support@yourcompany.com), verify it at resend.com \u2192 Domains, then set RESEND_FROM_EMAIL in env.',
+        );
+      }
+      return warnings;
+    }
     case 'slack':
       if (!process.env.SLACK_WEBHOOK_URL) {
         return [
