@@ -45,13 +45,16 @@ export const env = {
   SUPABASE_SERVICE_ROLE_KEY: () => required('SUPABASE_SERVICE_ROLE_KEY'),
 
   // Direct Postgres connection string (Supabase → Settings → Database
-  // → Connection string → Transaction pooler, port 6543). Required so
-  // schema.sql runs automatically on the first admin page load — no
-  // manual SQL Editor step. The connection is opened only when our
-  // probe of the config table fails (i.e., schema is genuinely missing),
-  // so the migration never re-runs against a populated database. The
-  // schema.sql is also idempotent (CREATE TABLE IF NOT EXISTS, INSERT
-  // ON CONFLICT DO NOTHING) — even a forced re-run wouldn't wipe data.
+  // → Connection string → "Session pooler" tab, port 5432). Required
+  // so schema.sql runs automatically on the first admin page load —
+  // no manual SQL Editor step. Use Session pooler, NOT Transaction
+  // pooler — Transaction pooler can reject multi-statement DDL.
+  //
+  // The connection is opened only when our probe of the config table
+  // fails (i.e., schema is genuinely missing), so the migration never
+  // re-runs against a populated database. schema.sql is also
+  // idempotent (CREATE TABLE IF NOT EXISTS, INSERT ON CONFLICT DO
+  // NOTHING) — even a forced re-run wouldn't wipe data.
   DATABASE_URL: () => required('DATABASE_URL'),
 
   // Admin gate — single shared password + cookie signing key.

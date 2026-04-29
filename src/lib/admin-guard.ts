@@ -2,6 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { tryAutoMigrate } from './auto-migrate';
 import { getConfig } from './supabase';
+import { ensureToolsRegistered } from './tool-register';
 
 /**
  * Run at the top of any admin page that touches Supabase. Three-tier:
@@ -37,6 +38,28 @@ export async function requireSchema(): Promise<void> {
 
   // No DATABASE_URL or migration failed — fall back to manual setup.
   redirect('/admin/setup');
+}
+
+/**
+ * Compose schema + tools as a single "is this deploy fully bootstrapped"
+ * check. Call this from any admin page that needs both the database AND
+ * the tool registrations to be in place. Internally:
+ *   1. requireSchema() — ensures the four core tables exist
+ *   2. ensureToolsRegistered() — registers any tool defined in
+ *      src/lib/tools/definitions.ts that doesn't yet have a row in
+ *      tool_registrations. Idempotent + cached.
+ *
+ * Tools are bootstrap-on-demand: the first admin to land on the
+ * dashboard after a fresh deploy triggers registration. Subsequent
+ * loads find the rows in Supabase and short-circuit (loadRegistrations
+ * caches in memory).
+ */
+export async function requireSetup(): Promise<void> {
+  await requireSchema();
+  // Tool registration failures bubble to /admin/error.tsx with the
+  // raw message — usually 401 (bad QLAUD_KEY) or 409 (qlaud already
+  // has the name registered out-of-band).
+  await ensureToolsRegistered();
 }
 
 /** Detect Supabase's "table not found" error shape. */

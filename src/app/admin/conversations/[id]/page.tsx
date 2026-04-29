@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { qlaud } from '@/lib/qlaud';
-import { requireSchema } from '@/lib/admin-guard';
+import { requireSetup } from "@/lib/admin-guard";
 import { supabase, type ActionRow, type ConversationRow } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export default async function AdminConversationPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSchema();
+  await requireSetup();
   const { id } = await params;
 
   const [{ data: conv, error: convErr }, { data: actions }] = await Promise.all(

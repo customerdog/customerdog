@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { CopySqlBlock } from './copy-sql';
 import { getSchemaSql } from '@/lib/schema-sql';
 import { getSupabaseSqlEditorUrl, isSchemaMissing } from '@/lib/admin-guard';
+import { getLastMigrationError } from '@/lib/auto-migrate';
 import { getConfig } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,7 @@ export default async function AdminSetupPage() {
 
   const sql = getSchemaSql();
   const sqlEditorUrl = getSupabaseSqlEditorUrl();
+  const migrationError = getLastMigrationError();
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 space-y-8">
@@ -58,6 +60,42 @@ export default async function AdminSetupPage() {
           needs aren&apos;t created yet. This is a one-time install.
         </p>
       </header>
+
+      {migrationError ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Auto-install was attempted and failed</p>
+          <p className="mt-1">
+            customerdog tried to run <code>schema.sql</code> automatically
+            via your <code>DATABASE_URL</code>, but Postgres rejected it:
+          </p>
+          <pre className="mt-2 overflow-auto rounded bg-white px-2 py-1 font-mono text-[11px]">
+            {migrationError}
+          </pre>
+          <p className="mt-2">
+            Most common fixes:
+          </p>
+          <ul className="ml-5 mt-1 list-disc space-y-0.5 text-xs">
+            <li>
+              Use the <strong>Session pooler</strong> URL (port <code>5432</code>),
+              not the Transaction pooler — Transaction pooler can reject
+              multi-statement DDL.
+            </li>
+            <li>
+              Verify the password in your URL hasn&apos;t been rotated since
+              you grabbed it.
+            </li>
+            <li>
+              Ensure the project isn&apos;t paused (Supabase free-tier
+              projects sleep after a week of inactivity — wake by
+              opening the dashboard).
+            </li>
+          </ul>
+          <p className="mt-2 text-xs">
+            Or skip this entirely and follow the 3-step manual install
+            below — equally fine.
+          </p>
+        </div>
+      ) : null}
 
       <ol className="space-y-6 rounded-lg border border-border p-5 text-sm">
         <li className="space-y-3">

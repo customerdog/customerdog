@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireSchema } from '@/lib/admin-guard';
+import { requireSetup } from "@/lib/admin-guard";
 import { getConfig } from '@/lib/supabase';
 import { CopySnippet } from './copy-snippet';
 
@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 export default async function AdminEmbedPage() {
-  await requireSchema();
+  await requireSetup();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
   let cfg: { brand_color?: string; company_name?: string } = {};
   try {

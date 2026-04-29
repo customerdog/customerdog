@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { signOutAdmin } from './login/actions';
-import { requireSchema } from '@/lib/admin-guard';
+import { requireSetup } from "@/lib/admin-guard";
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export const metadata = {
  * if the cookie is missing or expired you're already on /admin/login.
  */
 export default async function AdminDashboardPage() {
-  await requireSchema();
+  await requireSetup();
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">

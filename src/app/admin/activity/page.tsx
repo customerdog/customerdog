@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireSchema } from '@/lib/admin-guard';
+import { requireSetup } from "@/lib/admin-guard";
 import { supabase, type ActionRow } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +21,7 @@ const TYPE_BADGE: Record<ActionRow['type'], { label: string; cls: string }> = {
 };
 
 export default async function AdminActivityPage() {
-  await requireSchema();
+  await requireSetup();
   const { data, error } = await supabase()
     .from('actions')
     .select('*')

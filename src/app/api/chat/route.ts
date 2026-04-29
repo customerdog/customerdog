@@ -8,6 +8,7 @@ import {
 import { getSystemPrompt } from '@/lib/kb';
 import { getMissingRequiredEnv } from '@/lib/setup-check';
 import { supabase } from '@/lib/supabase';
+import { getRegisteredToolIds } from '@/lib/tool-register';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,8 +20,9 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // In-memory cache of the deployment's registered tool ids. Pulled once
-// per worker boot and reused — listing on every request would be
-// wasteful and the set rarely changes (rotation requires a redeploy).
+// per worker boot from Supabase (the source of truth — populated by
+// ensureToolsRegistered on first admin load) and reused. Listing on
+// every request would waste a query for a value that rarely changes.
 let toolIdsCache: { ids: string[]; loadedAt: number } | null = null;
 const TOOL_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -30,8 +32,7 @@ async function getToolIds(): Promise<string[]> {
     return toolIdsCache.ids;
   }
   try {
-    const r = await qlaud.listTools();
-    const ids = r.data.map((t) => t.id);
+    const ids = await getRegisteredToolIds();
     toolIdsCache = { ids, loadedAt: now };
     return ids;
   } catch {

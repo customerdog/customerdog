@@ -124,10 +124,16 @@ async function checkDatabaseUrl() {
       `value doesn't look like a Postgres URL (expected postgres:// or postgresql://, got "${url.slice(0, 16)}…")`,
     );
   }
-  if (!url.includes(':6543/')) {
+  if (!url.includes(':5432/') && !url.includes(':6543/')) {
     return fail(
       'database url',
-      'expected the Transaction pooler URL on port 6543 (the only one that works in serverless). Switch tabs in Supabase → Settings → Database → Connection string.',
+      'expected a pooler URL on port 5432 (Session) or 6543 (Transaction). Get it from Supabase → Settings → Database → Connection string.',
+    );
+  }
+  if (url.includes(':6543/')) {
+    skip(
+      'database url port',
+      'using Transaction pooler (6543); recommend switching to Session pooler (5432) — Transaction can reject our multi-statement schema.sql.',
     );
   }
   // Try to actually connect. Gives a clear error if the password is

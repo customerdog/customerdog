@@ -9,11 +9,11 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,DATABASE_URL,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%20%28admin%20scope%29.%20SUPABASE_URL%20%2B%20SUPABASE_SERVICE_ROLE_KEY%20from%20Settings%20%E2%86%92%20API%20Keys%20%28Secret%29.%20DATABASE_URL%20from%20Settings%20%E2%86%92%20Database%20%E2%86%92%20Transaction%20pooler%20%28port%206543%29%20so%20schema%20auto-runs%20on%20first%20deploy.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
 
-The button opens Vercel's import flow with all seven required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Then run `npm run register-tools` locally to wire up the escalation tools (see below).
+The button opens Vercel's import flow with all seven required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. The schema install + qlaud tool registration both happen automatically the first time you load `/admin/*` — no separate scripts to run.
 
 **Before you click the button, you'll need:**
 
-1. **A free Supabase project.** Create at [supabase.com](https://supabase.com). You don't have to run the schema yourself — `DATABASE_URL` (below) lets customerdog do it on first deploy. Grab three values: the **Project URL**, the **Secret API key** (Settings → API Keys → either tab works; see step 2 below), and the **Transaction pooler connection string** (Settings → Database → Connection string → Transaction pooler tab).
+1. **A free Supabase project.** Create at [supabase.com](https://supabase.com). You don't have to run the schema yourself — `DATABASE_URL` (below) lets customerdog do it on first deploy. Grab three values: the **Project URL**, the **Secret API key** (Settings → API Keys → either tab works; see step 2 below), and the **Session pooler connection string** (Settings → Database → Connection string → **Session** pooler tab, port 5432).
 2. **A qlaud key** with admin scope from [qlaud.ai/keys](https://qlaud.ai/keys).
 3. **Two random secrets** for the admin cookie + password: run `openssl rand -base64 32` twice.
 
@@ -68,7 +68,7 @@ Sign in at [supabase.com](https://supabase.com) → **New project** (the free ti
 
 **Either key works** with `supabase-js` and unlocks our `service_role`-equivalent permissions. Whichever tab you use, **DO NOT copy the Publishable / `anon` key** — that one is restricted by Row-Level Security and will return permission errors on every query against our tables.
 
-**c. Get the Postgres connection string** (`DATABASE_URL`). **Settings → Database → Connection string** tab. Pick **Transaction pooler** (port `6543` — serverless-friendly, the only one that works on Vercel functions). Copy the URL exactly; it has your project's database password embedded. customerdog uses this **only** to run `supabase/schema.sql` on the first admin page load — never wipes existing data because:
+**c. Get the Postgres connection string** (`DATABASE_URL`). **Settings → Database → Connection string** tab. Pick **Session pooler** (port `5432`). Use Session, NOT Transaction — the Transaction pooler can reject the multi-statement DDL in our `schema.sql`. Since we only use this connection during the rare migration event, the longer-lived connections of session mode are fine. Copy the URL exactly; it has your project's database password embedded. customerdog uses this **only** to run `supabase/schema.sql` on the first admin page load — never wipes existing data because:
 - Our `requireSchema()` helper probes the `config` table first and only attempts the migration when it's genuinely missing.
 - The migration also pre-checks `information_schema.tables` and short-circuits if our four tables already exist.
 - `schema.sql` itself uses `CREATE TABLE IF NOT EXISTS` and `INSERT … ON CONFLICT DO NOTHING` — even a forced re-run is a no-op against a populated database.
@@ -119,30 +119,16 @@ Open `http://localhost:3000/admin/login`, sign in with your `ADMIN_PASSWORD`, pa
 - Update `NEXT_PUBLIC_APP_URL` in Vercel → Settings → Environment Variables to the real deploy URL (e.g., `https://support.yourcompany.com`)
 - Redeploy
 
-**Or any other Next.js host** — Railway, Fly.io, Cloudflare Pages with the Workers adapter, your own VPS. Set the same six env vars in the host's environment configuration, then `npm run build` + `npm run start`. No Vercel-specific code anywhere in the repo.
+**Or any other Next.js host** — Railway, Fly.io, Cloudflare Pages with the Workers adapter, your own VPS. Set the same seven env vars in the host's environment configuration, then `npm run build` + `npm run start`. No Vercel-specific code anywhere in the repo.
 
-### 7. Register the escalation tools with qlaud
+### 7. First admin visit — auto-bootstrap
 
-This step happens once after your first deploy so the tool webhook URLs point at your live host:
+Open `https://your-deploy/admin/login`, sign in. The first admin page request triggers two automatic bootstrap steps in the background, both idempotent and once-per-deploy:
 
-```bash
-# Update NEXT_PUBLIC_APP_URL in .env.local first to match the deployed URL.
-npm run register-tools
-```
+1. **Schema install** — connects via `DATABASE_URL`, probes `information_schema.tables`, runs `supabase/schema.sql` if any of our tables are missing.
+2. **Tool registration** — for every tool in `src/lib/tools/definitions.ts` that doesn't yet have a row in `tool_registrations`, calls qlaud's `POST /v1/tools` and stores the result. The HMAC secrets live in Supabase, not in env vars.
 
-Output:
-
-```
-✓ create_ticket          → tool_…
-✓ send_email_to_user     → tool_…
-
-Done. Add these to your env (Vercel → Settings → Environment Variables, then redeploy):
-
-QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
-QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
-```
-
-Paste both into your hosting env vars and redeploy.
+You don't need to run `npm run register-tools` (it's still there as a manual escape hatch for forced rotation). If anything fails, the admin error boundary shows the underlying message + a likely fix.
 
 ### 8. Configure the agent
 
@@ -189,7 +175,7 @@ Open `https://your-deploy/admin/login` and:
 
 ## Adding a tool
 
-Tools are defined in [`src/lib/tools/definitions.ts`](src/lib/tools/definitions.ts). Add a new entry there + a corresponding route handler at `src/app/api/tools/<your-tool>/route.ts`, then re-run `npm run register-tools`. qlaud handles the dispatch loop, signature verification, retries, parallel fan-out — your handler just runs the business logic and returns `{ output: any }`.
+Tools are defined in [`src/lib/tools/definitions.ts`](src/lib/tools/definitions.ts). Add a new entry there + a corresponding route handler at `src/app/api/tools/<your-tool>/route.ts`. The next admin page load auto-registers it with qlaud. qlaud handles the dispatch loop, signature verification, retries, parallel fan-out — your handler just runs the business logic and returns `{ output: any }`.
 
 ## Adding a ticket destination
 

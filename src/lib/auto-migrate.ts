@@ -36,10 +36,19 @@ const EXPECTED_TABLES = [
   'kb_sources',
   'conversations',
   'actions',
+  'tool_registrations',
 ] as const;
 
 let migrated = false;
 let inflight: Promise<boolean> | null = null;
+let lastError: string | null = null;
+
+/** Last failure message from runMigrationOnce(), so /admin/setup can
+ *  show "this is what we tried, this is why it didn't work" instead
+ *  of a useless 500. Cleared on next successful run. */
+export function getLastMigrationError(): string | null {
+  return lastError;
+}
 
 export async function tryAutoMigrate(): Promise<boolean> {
   if (migrated) return true;
@@ -49,10 +58,13 @@ export async function tryAutoMigrate(): Promise<boolean> {
   inflight = runMigrationOnce()
     .then((ok) => {
       migrated = ok;
+      if (ok) lastError = null;
       return ok;
     })
     .catch((e) => {
-      console.error('[auto-migrate] failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[auto-migrate] failed:', msg);
+      lastError = msg;
       return false;
     })
     .finally(() => {

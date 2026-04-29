@@ -5,6 +5,7 @@ import { sendTicket } from '@/lib/destinations';
 import { findConversationByThread, logAction, recordContactCollected } from '@/lib/activity';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getConfig } from '@/lib/supabase';
+import { getToolByName } from '@/lib/tool-register';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -45,7 +46,12 @@ type WebhookBody = {
 };
 
 export async function POST(req: Request) {
-  const secret = env.QLAUD_TOOL_SECRET_CREATE_TICKET();
+  // Resolve the HMAC secret. Supabase is the source of truth (set by
+  // ensureToolsRegistered on first admin load); env is a legacy
+  // fallback for operators who already used the npm run register-tools
+  // script.
+  const reg = await getToolByName('create_ticket').catch(() => null);
+  const secret = reg?.hmac_secret ?? env.QLAUD_TOOL_SECRET_CREATE_TICKET();
   if (!secret) {
     return NextResponse.json(
       { error: 'tool_not_registered' },
