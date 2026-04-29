@@ -8,6 +8,7 @@ import {
   fetchAndParseUrl,
   setSourceActive,
 } from '@/lib/kb';
+import { CRAWL_LIMIT, crawlSite } from '@/lib/kb-crawl';
 
 const REDIRECT_OK = '/admin/kb';
 const REDIRECT_ERR = (msg: string) =>
@@ -57,6 +58,31 @@ export async function deleteSourceAction(formData: FormData): Promise<void> {
   }
   revalidatePath('/admin/kb');
   redirect(REDIRECT_OK);
+}
+
+/** Multi-page crawl: discover all URLs under a base (sitemap or same-
+ *  origin link extraction), fetch + parse each, insert as kb_source rows.
+ *  Caps at 50 pages per run; dedupes against already-indexed URLs. */
+export async function crawlSiteAction(formData: FormData): Promise<void> {
+  const url = String(formData.get('url') ?? '').trim();
+  if (!url) redirect(REDIRECT_ERR('URL is required'));
+
+  let summary;
+  try {
+    summary = await crawlSite(url, CRAWL_LIMIT);
+  } catch (e) {
+    redirect(REDIRECT_ERR((e as Error).message));
+  }
+  revalidatePath('/admin/kb');
+
+  const params = new URLSearchParams({
+    added: 'crawl',
+    count: String(summary.added),
+    discovered: String(summary.discovered),
+    skipped: String(summary.skippedAlreadyIndexed),
+    failed: String(summary.skippedFailed),
+  });
+  redirect(`${REDIRECT_OK}?${params.toString()}`);
 }
 
 /** Toggle `active` flag on a source — disable without deleting. */

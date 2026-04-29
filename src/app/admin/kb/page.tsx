@@ -1,14 +1,19 @@
 import Link from 'next/link';
 import { listSources } from '@/lib/kb';
+import { CRAWL_LIMIT } from '@/lib/kb-crawl';
 import { requireSchema } from '@/lib/admin-guard';
 import {
   addMarkdownAction,
   addUrlAction,
+  crawlSiteAction,
   deleteSourceAction,
   toggleActiveAction,
 } from './actions';
 
 export const dynamic = 'force-dynamic';
+// Site crawl can stack 50 fetches × parsing — bump well past the
+// default. Hobby tier ignores values > 10s; Pro/Enterprise honor it.
+export const maxDuration = 60;
 
 export const metadata = {
   title: 'Knowledge base — customerdog admin',
@@ -17,12 +22,37 @@ export const metadata = {
 const ADD_FLASH: Record<string, string> = {
   url: 'URL fetched + added.',
   markdown: 'Markdown added.',
+  // 'crawl' — handled inline below to incorporate query-string counts.
 };
+
+function crawlFlashFromQuery(sp: {
+  count?: string;
+  discovered?: string;
+  skipped?: string;
+  failed?: string;
+}): string {
+  const added = sp.count ?? '0';
+  const discovered = sp.discovered ?? '0';
+  const skipped = sp.skipped ?? '0';
+  const failed = sp.failed ?? '0';
+  const parts = [`Added ${added}/${discovered} pages`];
+  if (Number(skipped) > 0) parts.push(`${skipped} were already indexed`);
+  if (Number(failed) > 0)
+    parts.push(`${failed} failed to fetch (delete + retry if needed)`);
+  return parts.join(' · ') + '.';
+}
 
 export default async function AdminKbPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; added?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    added?: string;
+    count?: string;
+    discovered?: string;
+    skipped?: string;
+    failed?: string;
+  }>;
 }) {
   await requireSchema();
   const sp = await searchParams;
@@ -56,6 +86,8 @@ export default async function AdminKbPage({
 
       {sp.error ? (
         <Banner kind="error">{sp.error}</Banner>
+      ) : sp.added === 'crawl' ? (
+        <Banner kind="ok">{crawlFlashFromQuery(sp)}</Banner>
       ) : sp.added ? (
         <Banner kind="ok">{ADD_FLASH[sp.added] ?? 'Added.'}</Banner>
       ) : null}
@@ -84,6 +116,34 @@ export default async function AdminKbPage({
           Server fetches the page, strips HTML, stores up to 200KB of plain
           text. JS-rendered pages won&apos;t parse well — paste markdown
           instead for those.
+        </p>
+      </section>
+
+      {/* ─── Crawl entire site ────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Crawl an entire docs site
+        </h2>
+        <form action={crawlSiteAction} className="flex gap-2">
+          <input
+            type="url"
+            name="url"
+            required
+            placeholder="https://docs.yourcompany.com/"
+            className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Crawl + add
+          </button>
+        </form>
+        <p className="text-xs text-muted-foreground">
+          Tries <code>sitemap.xml</code> first, falls back to extracting
+          same-origin links from the page. Caps at {CRAWL_LIMIT} pages
+          per run; URLs already in the list above are skipped, so you
+          can re-run after adding more docs.
         </p>
       </section>
 
