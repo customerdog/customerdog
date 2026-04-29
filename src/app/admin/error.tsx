@@ -95,13 +95,19 @@ export default function AdminError({
           </ol>
         </div>
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex flex-wrap gap-2 pt-2">
           <button
             onClick={reset}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             Try again
           </button>
+          <Link
+            href="/admin/setup"
+            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Run setup
+          </Link>
           <Link
             href="/admin"
             className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
@@ -115,6 +121,15 @@ export default function AdminError({
 }
 
 function guessCause(msg: string): string {
+  // Next.js production mode masks the actual error. Tell the operator
+  // exactly where to find the real one — almost always in Vercel logs
+  // under the digest we surface in the Technical details block.
+  if (
+    msg.includes('Server Components render') ||
+    msg.includes('specific message is omitted')
+  ) {
+    return "Next.js hid the real error in production. Open Vercel → Project → Logs (or Runtime Logs), search for the digest above — the line right above it has the actual exception (almost always a Supabase or qlaud call). The most common cause right after a customerdog version bump is a NEW Supabase table the schema migration hasn't run yet — visit /admin/setup if so.";
+  }
   // Supabase relation-not-found: PGRST205 (rest API) or "relation … does not exist"
   if (
     msg.includes('PGRST205') ||
@@ -122,7 +137,7 @@ function guessCause(msg: string): string {
     msg.includes("Could not find the table") ||
     msg.includes("Could not find the 'public.")
   ) {
-    return "A Supabase table doesn't exist. You probably haven't run supabase/schema.sql in your Supabase SQL Editor yet — do that, then refresh.";
+    return "A Supabase table doesn't exist. If you just upgraded customerdog, the schema needs to be re-applied to add the new tables — go to /admin/setup. If this is a fresh deploy, run supabase/schema.sql in your Supabase SQL Editor.";
   }
   // Supabase auth/permission errors
   if (
@@ -132,7 +147,7 @@ function guessCause(msg: string): string {
     msg.includes('permission denied') ||
     /401|403/.test(msg)
   ) {
-    return "Supabase rejected the API key. Double-check that SUPABASE_SERVICE_ROLE_KEY is the Secret key (not the publishable / anon key) and that SUPABASE_URL matches the same project.";
+    return "Supabase rejected the API key. Double-check that SUPABASE_SERVICE_ROLE_KEY is the Secret / service_role key (not the publishable / anon key — both look like eyJ… JWTs) and that SUPABASE_URL matches the same project.";
   }
   // Network / DNS
   if (
@@ -144,7 +159,7 @@ function guessCause(msg: string): string {
   }
   // qlaud reachability
   if (msg.includes('qlaud') || msg.includes('/v1/')) {
-    return "A qlaud call failed. Check QLAUD_KEY is valid and has admin scope (run `npm run register-tools` locally to live-test it).";
+    return "A qlaud call failed. Check QLAUD_KEY is valid and has admin scope. The most common 401 cause is rotation; mint a fresh key at qlaud.ai/keys.";
   }
-  return "An unexpected error. Check the Vercel function logs for the full trace, or run `npm run check` locally with your production env to diagnose.";
+  return "An unexpected error. Check the Vercel function logs for the full trace (search the digest above), or run `npm run check` locally with your production env to diagnose.";
 }
