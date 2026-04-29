@@ -59,10 +59,16 @@ npm install
 
 Sign in at [supabase.com](https://supabase.com) → **New project** (the free tier is enough for ~10K conversations). Once it's ready:
 
-- **SQL Editor → New query →** paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
-- **Project Settings → API →** copy these two values, you'll need them in step 4:
-  - `Project URL` → `SUPABASE_URL`
-  - **Secret key** (sometimes still labelled `service_role`) → `SUPABASE_SERVICE_ROLE_KEY`. **NOT the Publishable / `anon` key** — they look almost identical (both are `eyJ…` JWTs), but the publishable one is gated by Row-Level Security and won't have permission to read the tables we ship.
+**a. Run the schema.** Left sidebar → **SQL Editor** → **+ New query** → paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**. You should see "Success. No rows returned" — the tables are created.
+
+**b. Get the Project URL** (`SUPABASE_URL`). Click the green **Connect** button at the top of any project page; the URL is in the popover. Format: `https://<project-ref>.supabase.co`.
+
+**c. Get the Secret API key** (`SUPABASE_SERVICE_ROLE_KEY`). Left sidebar → **Settings** (gear icon at the bottom) → **API Keys**. You'll see two tabs:
+
+- **Publishable and secret API keys** ← Supabase's newer system. Click here, then copy the **Secret** key (`sb_secret_…`). This is what they recommend going forward.
+- **Legacy anon, service_role API keys** ← the older format. If you're on this tab, copy the **service_role secret** (`eyJ…` JWT). Same effective permissions; works fine with our code.
+
+**Either key works** with `supabase-js` and unlocks our `service_role`-equivalent permissions. Whichever tab you use, **DO NOT copy the Publishable / `anon` key** — that one is restricted by Row-Level Security and will return permission errors on every query against our tables.
 
 ### 3. Mint a qlaud key
 
