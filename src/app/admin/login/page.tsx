@@ -1,4 +1,6 @@
 import { signInAdmin } from './actions';
+import { SetupScreen } from '@/components/setup-screen';
+import { getMissingRequiredEnv } from '@/lib/setup-check';
 
 export const metadata = {
   title: 'Sign in — customerdog admin',
@@ -15,6 +17,14 @@ export default async function AdminLoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // If the deploy isn't finished, the operator IS the admin — show
+  // them what to fix instead of a "wrong password" loop they can't
+  // escape (since the password isn't set, no input would work).
+  const missing = getMissingRequiredEnv();
+  if (missing.length > 0) {
+    return <SetupScreen missing={missing} />;
+  }
+
   const { error } = await searchParams;
   const errorCopy = error ? ERROR_COPY[error] : null;
 

@@ -1,5 +1,7 @@
 import { ChatShell } from '@/components/chat/chat-shell';
+import { SetupScreen } from '@/components/setup-screen';
 import { getConfig } from '@/lib/supabase';
+import { getMissingRequiredEnv } from '@/lib/setup-check';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,11 @@ export const metadata = {
  * and shows a close button that postMessages the parent.
  */
 export default async function EmbedPage() {
+  const missing = getMissingRequiredEnv();
+  if (missing.length > 0) {
+    return <SetupScreen missing={missing} mode="embed" />;
+  }
+
   let companyName = 'Support';
   let brandColor: string | undefined;
   try {
@@ -22,7 +29,7 @@ export default async function EmbedPage() {
     companyName = cfg.company_name;
     brandColor = cfg.brand_color;
   } catch {
-    // Render generic shell if Supabase unavailable.
+    // Supabase reachable but query failed — render generic shell.
   }
 
   return (

@@ -1,5 +1,7 @@
 import { ChatShell } from '@/components/chat/chat-shell';
+import { SetupScreen } from '@/components/setup-screen';
 import { getConfig } from '@/lib/supabase';
+import { getMissingRequiredEnv } from '@/lib/setup-check';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,11 @@ export const metadata = {
  * For embedding in a host page, use /embed (no header chrome) instead.
  */
 export default async function ChatPage() {
+  const missing = getMissingRequiredEnv();
+  if (missing.length > 0) {
+    return <SetupScreen missing={missing} />;
+  }
+
   let companyName = 'Support';
   let brandColor: string | undefined;
   try {
@@ -22,7 +29,7 @@ export default async function ChatPage() {
     companyName = cfg.company_name;
     brandColor = cfg.brand_color;
   } catch {
-    // Supabase not reachable — render generic shell.
+    // Supabase reachable but query failed — render generic shell.
   }
 
   return <ChatShell companyName={companyName} brandColor={brandColor} mode="page" />;

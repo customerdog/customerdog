@@ -6,6 +6,7 @@ import {
   setThreadId,
 } from '@/lib/anon-session';
 import { getSystemPrompt } from '@/lib/kb';
+import { getMissingRequiredEnv } from '@/lib/setup-check';
 import { supabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -64,6 +65,22 @@ const errStatus = (n: number): ErrStatus =>
     : 502) as ErrStatus;
 
 export async function POST(req: Request) {
+  // Bail early if the deploy isn't fully configured — the chat UI's
+  // input bar shows this `error` field as a flash message instead of
+  // a stack trace.
+  const missing = getMissingRequiredEnv();
+  if (missing.length > 0) {
+    return NextResponse.json(
+      {
+        error: 'setup_incomplete',
+        detail: `Customerdog isn't fully configured. Missing env: ${missing
+          .map((m) => m.name)
+          .join(', ')}. Visit / for setup instructions.`,
+      },
+      { status: 503 },
+    );
+  }
+
   let body: { message?: string };
   try {
     body = await req.json();

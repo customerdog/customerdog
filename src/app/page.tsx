@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { getConfig } from '@/lib/supabase';
+import { getMissingRequiredEnv } from '@/lib/setup-check';
+import { SetupScreen } from '@/components/setup-screen';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +15,11 @@ export const dynamic = 'force-dynamic';
  * looks like the company's own product.
  */
 export default async function LandingPage() {
+  const missing = getMissingRequiredEnv();
+  if (missing.length > 0) {
+    return <SetupScreen missing={missing} />;
+  }
+
   let companyName = 'Your Company';
   let configured = false;
   try {
@@ -20,8 +27,9 @@ export default async function LandingPage() {
     companyName = cfg.company_name;
     configured = cfg.company_name !== 'Your Company';
   } catch {
-    // Supabase not reachable yet — render generic landing so first-deploy
-    // visitors aren't greeted with a 500.
+    // Supabase reachable but query failed (e.g., schema not run yet).
+    // Render generic landing so first-deploy visitors aren't greeted
+    // with a 500.
   }
 
   return (
