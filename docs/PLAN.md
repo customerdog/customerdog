@@ -121,7 +121,7 @@ npm install
 # 2. Supabase: create a free project at supabase.com, then in SQL Editor:
 #    paste & run supabase/schema.sql
 
-# 3. qlaud: create a standard key at console.qlaud.ai/keys
+# 3. qlaud: create a standard key at qlaud.ai/keys
 
 # 4. Env
 cp .env.example .env.local

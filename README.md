@@ -7,14 +7,14 @@
 
 ## One-click deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20console.qlaud.ai%20%28admin%20scope%29.%20SUPABASE_*%20from%20Project%20Settings%20%E2%86%92%20API.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%20%28admin%20scope%29.%20SUPABASE_*%20from%20Project%20Settings%20%E2%86%92%20API.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
 
 The button opens Vercel's import flow with all six required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Then run `npm run register-tools` locally to wire up the escalation tools (see below).
 
 **Before you click the button, you'll need:**
 
 1. **A free Supabase project.** Create at [supabase.com](https://supabase.com) → open SQL Editor → paste & run [`supabase/schema.sql`](supabase/schema.sql). Copy `URL` + `service_role` key from Project Settings → API.
-2. **A qlaud key** with admin scope from [console.qlaud.ai/keys](https://console.qlaud.ai/keys).
+2. **A qlaud key** with admin scope from [qlaud.ai/keys](https://qlaud.ai/keys).
 3. **Two random secrets** for the admin cookie + password: run `openssl rand -base64 32` twice.
 
 ---
@@ -66,7 +66,7 @@ Sign in at [supabase.com](https://supabase.com) → **New project** (the free ti
 
 ### 3. Mint a qlaud key
 
-Sign in at [console.qlaud.ai/keys](https://console.qlaud.ai/keys) → **Create key** with **scope = admin** (admin scope is required to register tools). Copy the `qlk_live_…` value — you'll need it in step 4.
+Sign in at [qlaud.ai/keys](https://qlaud.ai/keys) → **Create key** with **scope = admin** (admin scope is required to register tools). Copy the `qlk_live_…` value — you'll need it in step 4.
 
 ### 4. Local env vars
 
@@ -159,7 +159,7 @@ Open `https://your-deploy/admin/login` and:
 
 | Var | Where to get it |
 |---|---|
-| `QLAUD_KEY` | console.qlaud.ai/keys (admin scope) |
+| `QLAUD_KEY` | qlaud.ai/keys (admin scope) |
 | `SUPABASE_URL` | supabase.com → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | same |
 | `ADMIN_PASSWORD` | `openssl rand -base64 32` |

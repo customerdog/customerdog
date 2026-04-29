@@ -26,7 +26,7 @@ export const env = {
   NEXT_PUBLIC_APP_URL: () => required('NEXT_PUBLIC_APP_URL'),
 
   // qlaud — single key for all chat + admin (tool registration). Get
-  // one at console.qlaud.ai/keys; admin scope is required for
+  // one at qlaud.ai/keys; admin scope is required for
   // /v1/tools, standard scope is fine for chat alone.
   QLAUD_BASE_URL: () => optional('QLAUD_BASE_URL') ?? 'https://api.qlaud.ai',
   QLAUD_KEY: () => required('QLAUD_KEY'),

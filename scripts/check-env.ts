@@ -53,7 +53,7 @@ async function checkQlaud() {
     if (r.status === 403) {
       return fail(
         'qlaud key',
-        'returned 403 — key works but is missing admin scope (needed to register tools). Mint one at console.qlaud.ai/keys with scope=admin.',
+        'returned 403 — key works but is missing admin scope (needed to register tools). Mint one at qlaud.ai/keys with scope=admin.',
       );
     }
     if (!r.ok) {

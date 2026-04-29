@@ -50,7 +50,7 @@ const qlaudKey = process.env.QLAUD_KEY;
 if (!qlaudKey) {
   die(
     'QLAUD_KEY is not set.\n' +
-      '  Mint one at https://console.qlaud.ai/keys (admin scope is required\n' +
+      '  Mint one at https://qlaud.ai/keys (admin scope is required\n' +
       '  to register tools), then add it to your env:\n' +
       `    ${DIM}QLAUD_KEY=qlk_live_…${RESET}`,
   );
@@ -123,13 +123,13 @@ async function registerTool(def: ToolDef): Promise<RegisterResult> {
         if (e.status === 401) {
           die(
             `QLAUD_KEY was rejected (401). The key is invalid, revoked, or expired.\n` +
-              `  Mint a fresh one at https://console.qlaud.ai/keys.`,
+              `  Mint a fresh one at https://qlaud.ai/keys.`,
           );
         }
         if (e.status === 403) {
           die(
             `QLAUD_KEY is missing admin scope (403). Tool registration requires\n` +
-              `  admin scope. Mint a new key at https://console.qlaud.ai/keys with\n` +
+              `  admin scope. Mint a new key at https://qlaud.ai/keys with\n` +
               `  scope=admin and update QLAUD_KEY.`,
           );
         }
