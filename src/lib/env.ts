@@ -44,6 +44,13 @@ export const env = {
   SUPABASE_URL: () => required('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: () => required('SUPABASE_SERVICE_ROLE_KEY'),
 
+  // Optional: direct Postgres connection string (Supabase →
+  // Settings → Database → Connection string → Transaction pooler).
+  // If set, /admin/setup is skipped — schema.sql runs automatically
+  // on the first admin page load. If unset, the operator runs the
+  // schema manually via the /admin/setup click flow.
+  DATABASE_URL: () => optional('DATABASE_URL'),
+
   // Admin gate — single shared password + cookie signing key.
   // Generate strong values: `openssl rand -base64 32` for both.
   ADMIN_PASSWORD: () => required('ADMIN_PASSWORD'),

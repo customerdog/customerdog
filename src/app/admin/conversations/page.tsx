@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { requireSchema } from '@/lib/admin-guard';
 import { supabase, type ConversationRow } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,7 @@ export const metadata = {
 };
 
 export default async function AdminConversationsPage() {
+  await requireSchema();
   const { data, error } = await supabase()
     .from('conversations')
     .select('*')

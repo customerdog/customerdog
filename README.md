@@ -61,6 +61,8 @@ Sign in at [supabase.com](https://supabase.com) → **New project** (the free ti
 
 **a. Run the schema.** Left sidebar → **SQL Editor** → **+ New query** → paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**. You should see "Success. No rows returned" — the tables are created.
 
+> **Skip this step?** Yes, if you set the optional `DATABASE_URL` env var in step 4. customerdog will run the schema automatically on the first admin page load — useful for fresh forks where you want zero manual DB setup. Either way, if you forget to install the schema, the admin page bounces you to a click-to-install flow at `/admin/setup`.
+
 **b. Get the Project URL** (`SUPABASE_URL`). Click the green **Connect** button at the top of any project page; the URL is in the popover. Format: `https://<project-ref>.supabase.co`.
 
 **c. Get the Secret API key** (`SUPABASE_SERVICE_ROLE_KEY`). Left sidebar → **Settings** (gear icon at the bottom) → **API Keys**. You'll see two tabs:

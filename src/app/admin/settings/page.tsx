@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { requireSchema } from '@/lib/admin-guard';
 import { getConfig } from '@/lib/supabase';
 import { saveSettingsAction } from './actions';
 
@@ -13,6 +14,7 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
+  await requireSchema();
   const sp = await searchParams;
   const cfg = await getConfig();
 

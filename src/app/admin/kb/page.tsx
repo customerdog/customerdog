@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { listSources } from '@/lib/kb';
+import { requireSchema } from '@/lib/admin-guard';
 import {
   addMarkdownAction,
   addUrlAction,
@@ -23,6 +24,7 @@ export default async function AdminKbPage({
 }: {
   searchParams: Promise<{ error?: string; added?: string }>;
 }) {
+  await requireSchema();
   const sp = await searchParams;
   const sources = await listSources();
   const totalBytes = sources
