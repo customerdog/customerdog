@@ -1,6 +1,6 @@
 import 'server-only';
 import { getConfig, type KbSourceRow, supabase } from './supabase';
-import { htmlToText } from './html-to-text';
+import { extractContent } from './html-extract';
 
 /**
  * Knowledge base operations.
@@ -33,7 +33,16 @@ const SYSTEM_PROMPT_SOFT_LIMIT_BYTES = 1_500_000;
 
 // ─── Ingestion ─────────────────────────────────────────────────────────
 
-/** Fetch + parse a URL into plain text. Throws on network/format errors. */
+/**
+ * Fetch + parse a URL into plain text. Two paths:
+ *
+ *   • If FIRECRAWL_API_KEY is set in env, route through Firecrawl's
+ *     /v1/scrape endpoint. Firecrawl renders the page in a real
+ *     browser and returns clean markdown — handles client-rendered
+ *     SPAs that our native fetch can't see into.
+ *   • Otherwise: native fetch + Readability-based extraction. Free,
+ *     fast, works for any SSR/SSG page (most marketing + docs sites).
+ */
 export async function fetchAndParseUrl(url: string): Promise<string> {
   let u: URL;
   try {
@@ -45,30 +54,11 @@ export async function fetchAndParseUrl(url: string): Promise<string> {
     throw new Error(`Unsupported protocol: ${u.protocol} (use http or https)`);
   }
 
-  let res: Response;
-  try {
-    res = await fetch(u.toString(), {
-      redirect: 'follow',
-      headers: {
-        'user-agent': 'customerdog-kb-fetcher/1.0 (+customer-support-agent)',
-        accept: 'text/html, text/markdown, text/plain, */*;q=0.5',
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch (e) {
-    throw new Error(`Network error fetching ${u}: ${(e as Error).message}`);
-  }
-  if (!res.ok) {
-    throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
-  }
-
-  const ct = (res.headers.get('content-type') ?? '').toLowerCase();
-  const body = await res.text();
   let parsed: string;
-  if (ct.includes('text/html') || body.trimStart().startsWith('<')) {
-    parsed = htmlToText(body);
+  if (process.env.FIRECRAWL_API_KEY) {
+    parsed = await fetchViaFirecrawl(u.toString());
   } else {
-    parsed = body;
+    parsed = await fetchAndExtractNative(u.toString());
   }
 
   if (parsed.length === 0) {
@@ -78,6 +68,65 @@ export async function fetchAndParseUrl(url: string): Promise<string> {
     parsed = parsed.slice(0, MAX_CONTENT_BYTES);
   }
   return parsed;
+}
+
+/** Default path: native fetch + Readability extraction. */
+async function fetchAndExtractNative(url: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      redirect: 'follow',
+      headers: {
+        'user-agent': 'customerdog-kb-fetcher/1.0 (+customer-support-agent)',
+        accept: 'text/html, text/markdown, text/plain, */*;q=0.5',
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    throw new Error(`Network error fetching ${url}: ${(e as Error).message}`);
+  }
+  if (!res.ok) {
+    throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+  }
+
+  const ct = (res.headers.get('content-type') ?? '').toLowerCase();
+  const body = await res.text();
+  if (ct.includes('text/html') || body.trimStart().startsWith('<')) {
+    return extractContent(body, url);
+  }
+  return body;
+}
+
+/** Opt-in path: Firecrawl handles JS rendering server-side. */
+async function fetchViaFirecrawl(url: string): Promise<string> {
+  const apiKey = process.env.FIRECRAWL_API_KEY!;
+  let res: Response;
+  try {
+    res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ url, formats: ['markdown'] }),
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (e) {
+    throw new Error(`Firecrawl network error: ${(e as Error).message}`);
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Firecrawl ${res.status}: ${detail.slice(0, 300)}`);
+  }
+  const body = (await res.json()) as {
+    success?: boolean;
+    data?: { markdown?: string };
+    error?: string;
+  };
+  if (!body.success || !body.data?.markdown) {
+    throw new Error(body.error ?? 'Firecrawl returned no markdown');
+  }
+  return body.data.markdown;
 }
 
 // ─── CRUD ──────────────────────────────────────────────────────────────

@@ -66,6 +66,15 @@ export const env = {
   // email tickets. Get an API key at resend.com.
   RESEND_API_KEY: () => optional('RESEND_API_KEY'),
 
+  // Firecrawl — optional. When set, KB ingestion routes URL fetches
+  // through Firecrawl's /v1/scrape endpoint, which renders pages in
+  // a real browser server-side. Use this if your sources are
+  // client-rendered SPAs that the native fetch+Readability path
+  // can't see into. Without it, customerdog handles SSR/SSG pages
+  // (most docs and marketing sites) just fine. Free tier covers
+  // 500 page-credits at firecrawl.dev.
+  FIRECRAWL_API_KEY: () => optional('FIRECRAWL_API_KEY'),
+
   // Email destination
   TICKET_EMAIL_TO: () => optional('TICKET_EMAIL_TO'),
 
