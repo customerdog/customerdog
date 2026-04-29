@@ -28,6 +28,11 @@ const REQUIRED_VARS: ReadonlyArray<RequiredVar> = [
     reason: 'Supabase service-role key (NOT the anon key)',
   },
   {
+    name: 'DATABASE_URL',
+    reason:
+      'Postgres connection string — used to auto-run schema.sql on first admin page load (Supabase → Settings → Database → Transaction pooler)',
+  },
+  {
     name: 'ADMIN_PASSWORD',
     reason: 'gates /admin/* sign-in',
   },

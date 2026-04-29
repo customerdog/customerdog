@@ -7,13 +7,13 @@
 
 ## One-click deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%20%28admin%20scope%29.%20SUPABASE_*%20from%20Project%20Settings%20%E2%86%92%20API.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,DATABASE_URL,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%20%28admin%20scope%29.%20SUPABASE_URL%20%2B%20SUPABASE_SERVICE_ROLE_KEY%20from%20Settings%20%E2%86%92%20API%20Keys%20%28Secret%29.%20DATABASE_URL%20from%20Settings%20%E2%86%92%20Database%20%E2%86%92%20Transaction%20pooler%20%28port%206543%29%20so%20schema%20auto-runs%20on%20first%20deploy.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
 
-The button opens Vercel's import flow with all six required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Then run `npm run register-tools` locally to wire up the escalation tools (see below).
+The button opens Vercel's import flow with all seven required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Then run `npm run register-tools` locally to wire up the escalation tools (see below).
 
 **Before you click the button, you'll need:**
 
-1. **A free Supabase project.** Create at [supabase.com](https://supabase.com) → open SQL Editor → paste & run [`supabase/schema.sql`](supabase/schema.sql). Copy `URL` + `service_role` key from Project Settings → API.
+1. **A free Supabase project.** Create at [supabase.com](https://supabase.com). You don't have to run the schema yourself — `DATABASE_URL` (below) lets customerdog do it on first deploy. Grab three values: the **Project URL**, the **Secret API key** (Settings → API Keys → either tab works; see step 2 below), and the **Transaction pooler connection string** (Settings → Database → Connection string → Transaction pooler tab).
 2. **A qlaud key** with admin scope from [qlaud.ai/keys](https://qlaud.ai/keys).
 3. **Two random secrets** for the admin cookie + password: run `openssl rand -base64 32` twice.
 
@@ -59,18 +59,21 @@ npm install
 
 Sign in at [supabase.com](https://supabase.com) → **New project** (the free tier is enough for ~10K conversations). Once it's ready:
 
-**a. Run the schema.** Left sidebar → **SQL Editor** → **+ New query** → paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**. You should see "Success. No rows returned" — the tables are created.
+**a. Get the Project URL** (`SUPABASE_URL`). Click the green **Connect** button at the top of any project page; the URL is in the popover. Format: `https://<project-ref>.supabase.co`.
 
-> **Skip this step?** Yes, if you set the optional `DATABASE_URL` env var in step 4. customerdog will run the schema automatically on the first admin page load — useful for fresh forks where you want zero manual DB setup. Either way, if you forget to install the schema, the admin page bounces you to a click-to-install flow at `/admin/setup`.
-
-**b. Get the Project URL** (`SUPABASE_URL`). Click the green **Connect** button at the top of any project page; the URL is in the popover. Format: `https://<project-ref>.supabase.co`.
-
-**c. Get the Secret API key** (`SUPABASE_SERVICE_ROLE_KEY`). Left sidebar → **Settings** (gear icon at the bottom) → **API Keys**. You'll see two tabs:
+**b. Get the Secret API key** (`SUPABASE_SERVICE_ROLE_KEY`). Left sidebar → **Settings** (gear icon at the bottom) → **API Keys**. You'll see two tabs:
 
 - **Publishable and secret API keys** ← Supabase's newer system. Click here, then copy the **Secret** key (`sb_secret_…`). This is what they recommend going forward.
 - **Legacy anon, service_role API keys** ← the older format. If you're on this tab, copy the **service_role secret** (`eyJ…` JWT). Same effective permissions; works fine with our code.
 
 **Either key works** with `supabase-js` and unlocks our `service_role`-equivalent permissions. Whichever tab you use, **DO NOT copy the Publishable / `anon` key** — that one is restricted by Row-Level Security and will return permission errors on every query against our tables.
+
+**c. Get the Postgres connection string** (`DATABASE_URL`). **Settings → Database → Connection string** tab. Pick **Transaction pooler** (port `6543` — serverless-friendly, the only one that works on Vercel functions). Copy the URL exactly; it has your project's database password embedded. customerdog uses this **only** to run `supabase/schema.sql` on the first admin page load — never wipes existing data because:
+- Our `requireSchema()` helper probes the `config` table first and only attempts the migration when it's genuinely missing.
+- The migration also pre-checks `information_schema.tables` and short-circuits if our four tables already exist.
+- `schema.sql` itself uses `CREATE TABLE IF NOT EXISTS` and `INSERT … ON CONFLICT DO NOTHING` — even a forced re-run is a no-op against a populated database.
+
+**d. Run the schema (skipped automatically — keep reading).** With `DATABASE_URL` set, you don't need to do anything in the SQL Editor. The first time you load `/admin/*`, customerdog opens a direct Postgres connection, runs `schema.sql`, and proceeds. If for any reason that fails (network, wrong URL), the admin redirects to `/admin/setup` for a manual click-to-install fallback.
 
 ### 3. Mint a qlaud key
 

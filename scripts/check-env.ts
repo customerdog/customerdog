@@ -110,6 +110,60 @@ async function checkSupabase() {
   }
 }
 
+async function checkDatabaseUrl() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    return fail(
+      'database url',
+      'DATABASE_URL is not set. Get it from Supabase → Settings → Database → Connection string → Transaction pooler (port 6543).',
+    );
+  }
+  if (!url.startsWith('postgres://') && !url.startsWith('postgresql://')) {
+    return fail(
+      'database url',
+      `value doesn't look like a Postgres URL (expected postgres:// or postgresql://, got "${url.slice(0, 16)}…")`,
+    );
+  }
+  if (!url.includes(':6543/')) {
+    return fail(
+      'database url',
+      'expected the Transaction pooler URL on port 6543 (the only one that works in serverless). Switch tabs in Supabase → Settings → Database → Connection string.',
+    );
+  }
+  // Try to actually connect. Gives a clear error if the password is
+  // wrong or the project is paused.
+  try {
+    const { Client } = await import('pg');
+    const client = new Client({
+      connectionString: url,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10_000,
+    });
+    await client.connect();
+    try {
+      const r = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name IN ('config', 'kb_sources', 'conversations', 'actions')`,
+      );
+      const have = parseInt(r.rows[0]?.count ?? '0', 10);
+      if (have === 4) {
+        pass('database url', 'connected; schema present (4/4 tables)');
+      } else {
+        pass(
+          'database url',
+          `connected; schema NOT yet installed (${have}/4 tables) — that's fine, customerdog auto-installs on first /admin/* request.`,
+        );
+      }
+    } finally {
+      await client.end().catch(() => {});
+    }
+  } catch (e) {
+    return fail('database url', `connect failed: ${(e as Error).message}`);
+  }
+}
+
 function checkAdmin() {
   const pw = process.env.ADMIN_PASSWORD;
   const cs = process.env.ADMIN_COOKIE_SECRET;
@@ -143,6 +197,7 @@ function checkOptionalIntegrations() {
   console.log(`${DIM}Checking env from .env.local…${RESET}\n`);
   await checkQlaud();
   await checkSupabase();
+  await checkDatabaseUrl();
   checkAdmin();
   checkOptionalIntegrations();
 

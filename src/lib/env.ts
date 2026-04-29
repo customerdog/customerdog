@@ -44,12 +44,15 @@ export const env = {
   SUPABASE_URL: () => required('SUPABASE_URL'),
   SUPABASE_SERVICE_ROLE_KEY: () => required('SUPABASE_SERVICE_ROLE_KEY'),
 
-  // Optional: direct Postgres connection string (Supabase →
-  // Settings → Database → Connection string → Transaction pooler).
-  // If set, /admin/setup is skipped — schema.sql runs automatically
-  // on the first admin page load. If unset, the operator runs the
-  // schema manually via the /admin/setup click flow.
-  DATABASE_URL: () => optional('DATABASE_URL'),
+  // Direct Postgres connection string (Supabase → Settings → Database
+  // → Connection string → Transaction pooler, port 6543). Required so
+  // schema.sql runs automatically on the first admin page load — no
+  // manual SQL Editor step. The connection is opened only when our
+  // probe of the config table fails (i.e., schema is genuinely missing),
+  // so the migration never re-runs against a populated database. The
+  // schema.sql is also idempotent (CREATE TABLE IF NOT EXISTS, INSERT
+  // ON CONFLICT DO NOTHING) — even a forced re-run wouldn't wipe data.
+  DATABASE_URL: () => required('DATABASE_URL'),
 
   // Admin gate — single shared password + cookie signing key.
   // Generate strong values: `openssl rand -base64 32` for both.
