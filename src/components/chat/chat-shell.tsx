@@ -1,10 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { DogLogo } from '@/components/dog-logo';
 import type { ThreadMessage } from '@/lib/qlaud';
 import { MessageStream } from './message-stream';
 import { InputBar } from './input-bar';
+
+// True iff we're rendering inside an iframe (i.e., something other
+// than the top window is our parent). useSyncExternalStore is the
+// React-idiomatic way to read browser-only state without hydration
+// mismatches: server snapshot returns false, client snapshot reads
+// the real value, no useEffect/setState needed.
+const noopSubscribe = () => () => {};
+function useInsideIframe(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => window !== window.parent,
+    () => false,
+  );
+}
 
 /**
  * Single-conversation chat surface for an anonymous visitor.
@@ -33,6 +47,12 @@ export function ChatShell({
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
 
+  // Show the close button only when we're actually inside an iframe.
+  // On a direct visit to /embed in a regular browser tab,
+  // window.parent === window, so a close button would do nothing and
+  // look broken — hide it.
+  const closable = useInsideIframe();
+
   // Optional: apply brand color as CSS variable so child components
   // pick it up via var(--brand-color).
   const style = brandColor
@@ -56,19 +76,39 @@ export function ChatShell({
       ) : (
         <header className="flex items-center justify-between border-b border-border bg-background px-3 py-2">
           <span className="text-sm font-semibold">{companyName}</span>
-          <button
-            type="button"
-            onClick={() => {
-              // Tell the host page (widget.js) to hide the iframe.
-              window.parent?.postMessage({ type: 'customerdog:close' }, '*');
-            }}
-            aria-label="Close chat"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+          {closable ? (
+            <button
+              type="button"
+              onClick={() => {
+                // Tell the host page (widget.js, or PreviewIframe in
+                // /admin/embed) to hide the iframe.
+                window.parent.postMessage(
+                  { type: 'customerdog:close' },
+                  '*',
+                );
+              }}
+              aria-label="Close chat"
+              // h-11 w-11 = 44px tap target (iOS guideline). Inner svg
+              // gets pointer-events:none so iOS Safari doesn't drop the
+              // tap on the SVG path instead of the button.
+              className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ pointerEvents: 'none' }}
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          ) : null}
         </header>
       )}
 
