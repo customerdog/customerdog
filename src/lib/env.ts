@@ -56,6 +56,13 @@ export const env = {
 
   // ─── Optional ─────────────────────────────────────────────────────
 
+  // Model override. Defaults to claude-haiku-4-5 (cheap + fast + keeps
+  // Anthropic prompt cache for the KB). Set this to any model qlaud
+  // routes to — e.g. claude-sonnet-4-6, gpt-4o-mini, gpt-4.1-mini,
+  // gemini-2.5-flash, deepseek-chat, mistral-medium-3. See qlaud's
+  // compatibility table at docs.qlaud.ai for the full list.
+  QLAUD_MODEL: () => optional('QLAUD_MODEL'),
+
   // Firecrawl — when set, KB ingestion routes URL fetches through
   // Firecrawl's /v1/scrape endpoint, which renders pages in a real
   // browser server-side. Use this if your sources are client-rendered

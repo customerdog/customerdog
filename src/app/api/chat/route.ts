@@ -148,8 +148,16 @@ export async function POST(req: Request) {
   // marked as tenant-shared in their qlaud dashboard. The AI sees them
   // directly (no meta-tool discovery hop), can call them mid-stream,
   // dispatch results flow back through qlaud.tool_dispatch_* SSE events.
+  //
+  // Model: defaults to claude-haiku-4-5 — for KB-grounded support
+  // chat, Haiku is roughly 3× cheaper than Sonnet, has higher per-
+  // minute rate-limit headroom on every Anthropic tier, and keeps the
+  // Anthropic prompt cache (cache_control below) so the bulk of the
+  // KB cost lands once per turn, not once per token. Operators can
+  // override via QLAUD_MODEL env (any model qlaud routes to —
+  // claude-*, gpt-*, gemini-*, deepseek-*, mistral-*, etc.).
   const requestBody: Record<string, unknown> = {
-    model: 'claude-sonnet-4-6',
+    model: process.env.QLAUD_MODEL ?? 'claude-haiku-4-5',
     max_tokens: 2048,
     system: [
       {

@@ -231,6 +231,7 @@ Already done step 7a (added tools at qlaud.ai/tools)? You're live.
 
 | Var | When |
 |---|---|
+| `QLAUD_MODEL` | Override the chat model. Defaults to `claude-haiku-4-5` — cheap, fast, and keeps the Anthropic prompt cache so your KB doesn't re-bill every turn. Set to `claude-sonnet-4-6` for sharper reasoning, or `gpt-4o-mini` / `gemini-2.5-flash` / `deepseek-chat` / `mistral-medium-3` to go even cheaper. qlaud routes to every major provider — full list at [docs.qlaud.ai](https://docs.qlaud.ai). |
 | `FIRECRAWL_API_KEY` | If your KB sources are JS-rendered SPAs that the native `fetch + Mozilla Readability` extractor can't see into. Routes URL ingestion through Firecrawl's `/v1/scrape` (free tier 500 page-credits at firecrawl.dev). Without it, customerdog handles SSR/SSG sites just fine. |
 
 ## Adding a tool
