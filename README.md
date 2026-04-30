@@ -19,6 +19,46 @@ The button opens Vercel's import flow with all seven required env vars pre-liste
 
 ---
 
+## Walkthrough
+
+### What visitors see
+
+Visitor types a question, AI streams an answer from your knowledge base. Markdown rendering, code blocks, links — all standard. Tools (file ticket, send email, lookup customer) fire mid-stream when the AI decides to call one; the response continues seamlessly. Footer says "Powered by customerdog" but that's a one-line edit if you want to remove it.
+
+![Visitor chatting with the customerdog AI assistant](docs/images/01-visitor-chat.png)
+
+### Admin dashboard
+
+Sign in once with `ADMIN_PASSWORD`, get a 30-day signed-cookie session. Four cards land you on the four pages that matter; tools (send email, file ticket, etc.) live entirely at [qlaud.ai/tools](https://qlaud.ai/tools) — enable any built-in or MCP connector and tenant-share it.
+
+![customerdog admin dashboard](docs/images/02-admin-dashboard.png)
+
+### Knowledge base — paste a URL, crawl a sitemap, paste markdown
+
+`/admin/kb` is one page with three input modes. Drop a single docs URL and the server fetches it + extracts the article body via Mozilla Readability. Or click **Crawl + add** on the docs root and customerdog discovers every page via `sitemap.xml` (falls back to same-origin link extraction), pulling up to 50 pages per run in ~10 seconds. The whole corpus sits in the AI's `cache_control: ephemeral` system prompt — Anthropic's prompt cache makes the long context cheap on every turn.
+
+![Admin knowledge base management](docs/images/03-admin-kb.png)
+
+### Settings — branding + system-prompt extras
+
+Four fields: company name (shown to visitors), brand color (the widget bubble accent), support email (visitor-facing fallback if a tool fails), and free-form system-prompt instructions (tone of voice, things to never say, when to invite a human takeover). That's it. No `ticket_destination`, no `RESEND_API_KEY` — qlaud handles all of that.
+
+![Admin settings page](docs/images/04-admin-settings.png)
+
+### Conversations — every visitor session, transcripts on demand
+
+Each anonymous visitor session shows up here. Click a row for the full transcript, pulled live from qlaud's `/v1/threads/<id>/messages` (we don't store transcripts twice). Useful for spotting patterns ("we keep getting asked about X — let's add it to the KB"). Power users get an "Open conversations in Supabase" link to view the raw rows in Supabase's Table Editor.
+
+![Past conversations](docs/images/05-admin-conversations.png)
+
+### Embed — copy the snippet, paste on your site
+
+`/admin/embed` shows the exact `<script>` tag with your `data-color` baked in, plus a **Live preview** iframe directly below — exactly what visitors see when they click the bubble. One copy, one paste, done. Works on any host page (no build step, no React, nothing to install on the host site).
+
+![Embed widget snippet generator with live preview](docs/images/06-admin-embed.png)
+
+---
+
 ## What you get
 
 - **Three visitor surfaces** — hosted page at `support.yourcompany.com/chat`, embeddable widget (`<script src="…/widget.js">`), or raw iframe at `/embed`.
