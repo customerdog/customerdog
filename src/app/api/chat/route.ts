@@ -34,18 +34,23 @@ export const maxDuration = 60;
 //      multiplexes tool dispatch into the same stream via
 //      `qlaud.tool_dispatch_*` events, parsed by lib/qlaud-stream.ts.
 //
-// Tool exposure: tools_mode='dynamic' (also the default when no tools
-// array is passed). Per qlaud's /v1/threads docs:
-//   "model gets 4 meta-tools, auto-discovers + dispatches anything in
-//    the catalog"
-// so the AI sees:
-//   - Custom webhooks we registered (create_ticket, send_email_to_user
-//     in tool_registrations)
-//   - Any qlaud built-in the operator enabled in their dashboard
-//     (qlaud-builtin/send-email, /linear, /zendesk, etc.)
-//   - Any MCP server they connected (/v1/mcp-servers + /v1/mcp-catalog)
-// All of them appear via the same `qlaud_search_tools` meta-tool when
-// the model needs one — no per-request enumeration required from us.
+// Tool exposure: tools_mode='tenant'. Per qlaud's tools-modes reference,
+// tenant mode "sends every tenant-shared tool you've registered to the
+// model, every turn, with no setup per request" — ideal for company-
+// internal agents and support bots, exactly our case.
+//
+// What this means in practice:
+//   - The OPERATOR controls which tools the AI can call by going to
+//     the qlaud dashboard and marking them as tenant-shared. That
+//     applies to all three tool kinds: custom webhooks (our
+//     create_ticket / send_email_to_user), qlaud built-ins (Resend,
+//     Slack, Linear, etc.), and MCP servers (Stripe, GitHub, …).
+//   - customerdog's chat handler doesn't enumerate tools per-request.
+//     We send `tools_mode: "tenant"` and qlaud injects whichever
+//     tools the operator has marked shared at dashboard level.
+//   - vs. dynamic mode: tenant skips the meta-tool discovery round-
+//     trip — the model sees the actual tools immediately. Lower
+//     latency + lower token overhead for known support workflows.
 //
 // Streaming + tool dispatch is supported across every model family
 // (ref: docs.qlaud.ai/api-reference/threads "Streaming + tools —
@@ -139,13 +144,10 @@ export async function POST(req: Request) {
   // long KB so subsequent turns in the same visitor's conversation cost
   // ~10% of an uncached turn.
   //
-  // tools_mode: 'dynamic' is qlaud's default when no `tools` array is
-  // passed; setting it explicitly makes the contract obvious. The AI
-  // gets 4 meta-tools (qlaud_search_tools, qlaud_manage_connections,
-  // qlaud_call_tool, qlaud_get_tool_schema) and uses them to discover
-  // + invoke any registered tool — our custom webhooks + qlaud
-  // built-ins + connected MCP servers all surface through the same
-  // discovery flow.
+  // tools_mode: 'tenant' — qlaud auto-attaches every tool the operator
+  // marked as tenant-shared in their qlaud dashboard. The AI sees them
+  // directly (no meta-tool discovery hop), can call them mid-stream,
+  // dispatch results flow back through qlaud.tool_dispatch_* SSE events.
   const requestBody: Record<string, unknown> = {
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
@@ -157,7 +159,7 @@ export async function POST(req: Request) {
       },
     ],
     content: message,
-    tools_mode: 'dynamic',
+    tools_mode: 'tenant',
   };
 
   let upstream: Response;

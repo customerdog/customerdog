@@ -130,6 +130,19 @@ Open `https://your-deploy/admin/login`, sign in. The first admin page request tr
 
 You don't need to run `npm run register-tools` (it's still there as a manual escape hatch for forced rotation). If anything fails, the admin error boundary shows the underlying message + a likely fix.
 
+### 7a. Tenant-share the tools at qlaud (one-time)
+
+customerdog's chat handler sends `tools_mode: "tenant"`, which means the AI gets exactly the tools you've marked as tenant-shared in your qlaud dashboard. **Until you do this once, the AI runs with zero tools attached and can only answer from the KB — `create_ticket` and `send_email_to_user` won't fire.**
+
+Steps (one-time, takes ~30 seconds):
+
+1. Open [qlaud.ai/tools](https://qlaud.ai/tools).
+2. Find the two webhooks customerdog auto-registered: `create_ticket` and `send_email_to_user`. They'll have your deploy URL listed as the webhook target.
+3. Toggle each one to **tenant-shared** (or pick the equivalent in qlaud's UI — the "Connect with your company's key" / share toggle).
+4. Optionally enable any qlaud built-ins or MCP catalog connectors you want (Resend, Linear, Stripe, GitHub, etc.) — also tenant-share them. They surface to the AI through the same flow as our webhooks.
+
+That's it. Every chat turn now includes whichever tools you've shared. To revoke a tool from the AI, untoggle it in the dashboard — no redeploy needed.
+
 ### 8. Configure the agent
 
 Open `https://your-deploy/admin/login` and:
