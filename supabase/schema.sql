@@ -9,21 +9,16 @@
 -- ──────────────────────────────────────────────────────────────────────
 
 -- ─── config ────────────────────────────────────────────────────────────
--- Single-row table. Holds the company's brand + escalation + visitor-
--- contact policy. Edited via /admin/settings (or directly in Supabase
--- Table Editor for power users).
+-- Single-row table. Holds the company's brand + system-prompt extras.
+-- Tool dispatch / ticket destinations live entirely in qlaud now —
+-- this row is purely about how customerdog presents itself to visitors.
+-- Edited via /admin/settings (or directly in Supabase Table Editor).
 CREATE TABLE IF NOT EXISTS config (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   company_name TEXT NOT NULL DEFAULT 'Your Company',
   brand_color TEXT NOT NULL DEFAULT '#dc2626',
-  ticket_destination TEXT NOT NULL CHECK (
-    ticket_destination IN ('email', 'slack', 'linear', 'zendesk')
-  ) DEFAULT 'email',
-  visitor_contact_required TEXT NOT NULL CHECK (
-    visitor_contact_required IN ('none', 'email', 'phone', 'either')
-  ) DEFAULT 'email',
-  support_email TEXT,
-  system_prompt_extras TEXT,
+  support_email TEXT,                    -- shown to visitor on errors
+  system_prompt_extras TEXT,             -- appended to the AI's system prompt
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -33,7 +28,8 @@ INSERT INTO config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 -- ─── kb_sources ────────────────────────────────────────────────────────
 -- The knowledge base. Each row is one URL we crawled + parsed, or one
 -- pasted markdown blob. The server concatenates active rows into a
--- single system prompt at boot (or on /api/admin/kb/refresh).
+-- single system prompt at request time, with cache_control: ephemeral
+-- so Anthropic's prompt cache makes the long context cheap.
 CREATE TABLE IF NOT EXISTS kb_sources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type TEXT NOT NULL CHECK (type IN ('url', 'markdown', 'pasted')),
@@ -47,16 +43,14 @@ CREATE INDEX IF NOT EXISTS kb_sources_active_idx ON kb_sources (active);
 
 -- ─── conversations ─────────────────────────────────────────────────────
 -- One row per anonymous visitor session. The transcript itself lives in
--- qlaud (qlaud_thread_id); this row is just the metadata + any contact
--- info collected during escalation.
+-- qlaud (qlaud_thread_id); this row is just the metadata so the admin
+-- dashboard can list past sessions + look up transcripts by thread id.
 CREATE TABLE IF NOT EXISTS conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   anon_visitor_id TEXT NOT NULL,         -- from cd_visitor cookie
   qlaud_thread_id TEXT NOT NULL UNIQUE,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ended_at TIMESTAMPTZ,
-  contact_email TEXT,
-  contact_phone TEXT,
   resolved BOOLEAN NOT NULL DEFAULT FALSE,
   summary TEXT
 );
@@ -68,31 +62,15 @@ CREATE INDEX IF NOT EXISTS conversations_thread_idx
 CREATE INDEX IF NOT EXISTS conversations_started_idx
   ON conversations (started_at DESC);
 
--- ─── actions ───────────────────────────────────────────────────────────
--- Audit log of everything the AI executed: tickets filed, emails sent,
--- contact captured. Admin browses this at /admin/activity. Writes are
--- fire-and-forget after the chat response is sent — never on the hot path.
-CREATE TABLE IF NOT EXISTS actions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (
-    type IN ('ticket_created', 'email_sent', 'contact_collected')
-  ),
-  payload JSONB NOT NULL DEFAULT '{}'::JSONB,
-  result_url TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS actions_conv_idx ON actions (conversation_id);
-CREATE INDEX IF NOT EXISTS actions_type_idx ON actions (type);
-CREATE INDEX IF NOT EXISTS actions_created_idx ON actions (created_at DESC);
-
 -- ─── notes ─────────────────────────────────────────────────────────────
--- Tool registration moved to qlaud's dashboard (tenant mode). The
--- previously-shipped `tool_registrations` table is no longer created on
--- new deploys; existing deploys may still have it sitting orphaned.
--- Drop it manually if you care:
+-- Removed in cleanup (qlaud now owns tool dispatch + audit):
+--   • `actions` table (tool action audit log)
+--   • `tool_registrations` table (HMAC secrets for our webhooks)
+-- These no longer ship in customerdog. Existing deploys may still have
+-- them sitting orphaned — drop manually if you want to clean up:
+--   DROP TABLE IF EXISTS actions;
 --   DROP TABLE IF EXISTS tool_registrations;
+--
 -- Row-level security is intentionally NOT enabled here. customerdog
 -- accesses Supabase exclusively via the service-role key from server-
 -- side code (never browser); the database is gated by the API key, not

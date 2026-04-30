@@ -26,7 +26,7 @@ import { supabase } from './supabase';
 // on it: requireSchema (gates admin pages) AND /admin/setup (decides
 // whether to redirect back to /admin). They MUST agree, otherwise an
 // upgrade where this latest table is missing creates a redirect loop.
-export const LATEST_TABLE = 'actions';
+export const LATEST_TABLE = 'conversations';
 
 /** True if the deploy's database has every table in schema.sql,
  *  inferred by probing the most recently added one. False if any

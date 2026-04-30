@@ -195,7 +195,6 @@ export async function getSystemPrompt(): Promise<{
     listActiveSources(),
   ]);
 
-  const policy = describeContactPolicy(config.visitor_contact_required);
   const kb = sources
     .map((s) => `## Source: ${s.source}\n\n${s.parsed_content}`)
     .join('\n\n---\n\n');
@@ -205,17 +204,21 @@ export async function getSystemPrompt(): Promise<{
     '',
     `## Your role`,
     '',
-    `Answer visitor questions accurately using the knowledge base below. Be concise, friendly, and never invent facts that aren't in the knowledge base. If a visitor asks something outside the KB, say so honestly and offer to escalate.`,
+    `Answer visitor questions accurately using the knowledge base below. Be concise, friendly, and never invent facts that aren't in the knowledge base. If a visitor asks something outside the KB, say so honestly.`,
     '',
-    `## Escalation`,
+    `## Tools`,
     '',
-    `When you can't fully resolve an issue, escalate by calling the **create_ticket** tool with a clear summary of the problem. ${policy}`,
+    `You may have access to additional tools (file ticket, send email, look up customer data, etc.) — these are surfaced by qlaud's tenant-mode dispatch. Use them naturally when relevant. If you need contact information from the visitor before taking an action that involves them (e.g., emailing them a recap, filing a ticket on their behalf), ask politely first.`,
     '',
+    config.support_email
+      ? `If a tool fails, tell the visitor to reach us at ${config.support_email}.`
+      : null,
     config.system_prompt_extras
-      ? [`## Additional instructions`, '', config.system_prompt_extras, ''].join(
+      ? ['', `## Additional instructions`, '', config.system_prompt_extras].join(
           '\n',
         )
       : null,
+    '',
     `## Knowledge base`,
     '',
     kb || '_(no knowledge base content yet — admin should add sources at /admin/kb)_',
@@ -234,21 +237,6 @@ async function listActiveSources(): Promise<KbSourceRow[]> {
     .order('updated_at', { ascending: true });
   if (error) throw new Error(`listActiveSources: ${error.message}`);
   return data ?? [];
-}
-
-function describeContactPolicy(
-  p: 'none' | 'email' | 'phone' | 'either',
-): string {
-  switch (p) {
-    case 'none':
-      return 'You do not need to collect contact info before escalating.';
-    case 'email':
-      return "Before calling create_ticket, ask the visitor for their email address and validate it looks like a real email. Pass the email in the tool input.";
-    case 'phone':
-      return "Before calling create_ticket, ask the visitor for a phone number we can reach them at. Accept international format (e.g., +1 555-555-5555). Pass the phone in the tool input.";
-    case 'either':
-      return "Before calling create_ticket, ask the visitor for either an email address or a phone number — whichever is easier for them. Pass whichever they provide in the tool input.";
-  }
 }
 
 export const KB_LIMITS = {

@@ -41,8 +41,6 @@ export type ConfigRow = {
   id: 1;
   company_name: string;
   brand_color: string;
-  ticket_destination: 'email' | 'slack' | 'linear' | 'zendesk';
-  visitor_contact_required: 'none' | 'email' | 'phone' | 'either';
   support_email: string | null;
   system_prompt_extras: string | null;
   updated_at: string;
@@ -63,19 +61,8 @@ export type ConversationRow = {
   qlaud_thread_id: string;
   started_at: string;
   ended_at: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
   resolved: boolean;
   summary: string | null;
-};
-
-export type ActionRow = {
-  id: string;
-  conversation_id: string | null;
-  type: 'ticket_created' | 'email_sent' | 'contact_collected';
-  payload: Record<string, unknown>;
-  result_url: string | null;
-  created_at: string;
 };
 
 // ─── Convenience helpers used across admin + chat handlers ─────────────

@@ -53,7 +53,6 @@ export default async function AdminConversationsPage() {
               <tr>
                 <Th>Started</Th>
                 <Th>Visitor</Th>
-                <Th>Contact</Th>
                 <Th>Resolved</Th>
                 <Th> </Th>
               </tr>
@@ -66,15 +65,6 @@ export default async function AdminConversationsPage() {
                     <code className="text-xs text-muted-foreground">
                       {c.anon_visitor_id.slice(0, 16)}…
                     </code>
-                  </Td>
-                  <Td>
-                    {c.contact_email ? (
-                      <span title={c.contact_email}>📧 {c.contact_email}</span>
-                    ) : c.contact_phone ? (
-                      <span>📞 {c.contact_phone}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
                   </Td>
                   <Td>
                     {c.resolved ? (

@@ -7,9 +7,9 @@
 
 ## One-click deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,DATABASE_URL,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%20%28admin%20scope%29.%20SUPABASE_URL%20%2B%20SUPABASE_SERVICE_ROLE_KEY%20from%20Settings%20%E2%86%92%20API%20Keys%20%28Secret%29.%20DATABASE_URL%20from%20Settings%20%E2%86%92%20Database%20%E2%86%92%20Transaction%20pooler%20%28port%206543%29%20so%20schema%20auto-runs%20on%20first%20deploy.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog&env=QLAUD_KEY,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,DATABASE_URL,ADMIN_PASSWORD,ADMIN_COOKIE_SECRET,NEXT_PUBLIC_APP_URL&envDescription=QLAUD_KEY%20from%20qlaud.ai%2Fkeys.%20SUPABASE_URL%20%2B%20SUPABASE_SERVICE_ROLE_KEY%20from%20Settings%20%E2%86%92%20API%20Keys%20%28Secret%29.%20DATABASE_URL%20from%20Settings%20%E2%86%92%20Database%20%E2%86%92%20Session%20pooler%20%28port%205432%29%20so%20schema%20auto-runs%20on%20first%20deploy.%20ADMIN_PASSWORD%20%2B%20ADMIN_COOKIE_SECRET%3A%20use%20%60openssl%20rand%20-base64%2032%60%20for%20each.%20NEXT_PUBLIC_APP_URL%3A%20put%20a%20placeholder%2C%20update%20after%20first%20deploy.&envLink=https%3A%2F%2Fgithub.com%2Fcustomerdog%2Fcustomerdog%2Fblob%2Fmain%2F.env.example&project-name=customerdog&repository-name=customerdog)
 
-The button opens Vercel's import flow with all seven required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. The schema install + qlaud tool registration both happen automatically the first time you load `/admin/*` — no separate scripts to run.
+The button opens Vercel's import flow with all seven required env vars pre-listed — Vercel walks you through entering each one before the first build, so a fresh deploy can't ship broken. After deploy, come back to your project's Environment Variables to update `NEXT_PUBLIC_APP_URL` from the placeholder to your real Vercel URL (or custom domain like `support.yourcompany.com`), and redeploy. Schema install runs automatically on first `/admin/*` load — no scripts to run on the customerdog side. Tools (file ticket, send email, lookup customer, etc.) are configured separately in your qlaud dashboard; see step 7 below.
 
 **Before you click the button, you'll need:**
 
@@ -23,10 +23,9 @@ The button opens Vercel's import flow with all seven required env vars pre-liste
 
 - **Three visitor surfaces** — hosted page at `support.yourcompany.com/chat`, embeddable widget (`<script src="…/widget.js">`), or raw iframe at `/embed`.
 - **Anonymous chat** — cookie-only sessions. Visitors don't sign up. Conversations correlate via `end_user_id` on qlaud's side.
-- **Knowledge base as cached context** — admin pastes URLs (server fetches + parses) or markdown; the entire corpus is concatenated into the system prompt with `cache_control: ephemeral` so Anthropic's prompt cache makes long contexts cheap.
-- **Configurable contact policy** — admin chooses whether the AI must collect email, phone, either, or none before escalating.
-- **Four ticket destinations** — email (Resend), Slack (incoming webhook), Linear (issue), Zendesk (ticket).
-- **Audit log + transcripts** — every email sent, ticket filed, contact captured shows up in `/admin/activity`. Past conversations browsable in `/admin/conversations`. Both also visible directly in the Supabase Table Editor for power users.
+- **Knowledge base as cached context** — admin pastes URLs (server fetches + parses with Mozilla Readability) or markdown; the entire corpus is concatenated into the system prompt with `cache_control: ephemeral` so Anthropic's prompt cache makes long contexts cheap.
+- **Tools live entirely at qlaud** — enable any built-in (Resend, Slack, Linear, Zendesk, GitHub, Notion, Twilio) or MCP catalog connector (Stripe, Shopify, HubSpot, etc.) at qlaud.ai/tools and tenant-share it. customerdog's chat handler picks them up automatically, no env vars or webhook handlers on our side.
+- **Past conversations browsable** in `/admin/conversations` — list of visitor sessions with transcripts pulled live from qlaud.
 - **Single password admin** — no Clerk, no third-party auth. Set `ADMIN_PASSWORD` in env.
 - **Single qlaud key** — no per-user key minting. One key per deployment, signed cookie holds the visitor's session.
 
@@ -125,48 +124,31 @@ Open `http://localhost:3000/admin/login`, sign in with your `ADMIN_PASSWORD`, pa
 
 Open `https://your-deploy/admin/login`, sign in. The first admin page request connects via `DATABASE_URL`, probes `information_schema.tables`, and runs `supabase/schema.sql` if any of our tables are missing. Idempotent + once-per-deploy. If anything fails, the admin error boundary shows the underlying message + a likely fix.
 
-### 7a. Set up tools at qlaud (one-time)
+### 7a. Add tools at qlaud.ai/tools
 
-customerdog's chat handler sends `tools_mode: "tenant"`, which means the AI gets exactly the tools you've configured + tenant-shared in your qlaud dashboard. **Until you do this once, the AI can only answer from the KB — it has no escalation tools.** customerdog itself doesn't register or manage tools; that's qlaud's job.
+customerdog's chat handler sends `tools_mode: "tenant"`. Whatever you tenant-share at [qlaud.ai/tools](https://qlaud.ai/tools), the AI can call. customerdog itself doesn't register tools, doesn't store HMAC secrets, doesn't dispatch destinations — qlaud handles all of that.
 
-You have two paths, both ~5 minutes. **Pick one based on whether you want customerdog's specific business logic.**
+**Three kinds of tool, all in qlaud's dashboard:**
 
-#### Path A: Use qlaud built-ins (recommended for most operators)
+| Kind | Use for | Examples |
+|---|---|---|
+| **Catalog (built-ins)** | Common providers — qlaud hosts the handler, you give it credentials | Resend send-email, Slack post-message, Linear create-issue, Zendesk create-ticket, GitHub create-issue, Notion append-page, Twilio SMS, web search, image gen |
+| **MCP server** | Vendor-curated connectors — one-click connect | Stripe, Shopify, HubSpot, PostHog, Cal.com, Atlassian, Sentry, etc. |
+| **Custom (webhook)** | An HTTPS endpoint you host — qlaud signs the dispatch with HMAC | Anything you build yourself |
 
-Open [qlaud.ai/tools](https://qlaud.ai/tools) → **Catalog** tab. Enable any of:
+Steps:
 
-- **Resend send-email** — paste your Resend API key. Now the AI can send emails directly.
-- **Linear / Zendesk / GitHub / Notion / Slack built-ins** — paste each provider's credentials. The AI gets `linear.create_issue`, `zendesk.open_ticket`, `slack.post_message`, etc.
-- **MCP catalog connectors** — Stripe, Shopify, HubSpot, PostHog, Cal.com, etc. One-click connect.
+1. Open [qlaud.ai/tools](https://qlaud.ai/tools).
+2. Click **Add a tool** → pick a kind, paste credentials.
+3. Toggle the new tool **tenant-shared**.
 
-Tenant-share each one, hit save. customerdog needs zero env vars or code changes. The AI sees these tools through tenant mode on the next chat turn.
+The AI sees it on the next chat turn, no redeploy needed. To revoke an integration, untoggle in the dashboard.
 
-#### Path B: Use customerdog's webhook tools (for contact policy + audit log)
+**Recommended starter pack for a customer-support deploy:**
 
-If you want customerdog-specific business logic — the `visitor_contact_required` gate before filing a ticket, the activity-log writes to `/admin/activity`, the per-conversation rate limits — you can register customerdog's two opinionated webhooks:
-
-```bash
-# 1. Make sure NEXT_PUBLIC_APP_URL in .env.local matches your Vercel URL.
-npm run register-tools
-```
-
-The script POSTs to qlaud's `/v1/tools` for `create_ticket` and `send_email_to_user`. Output:
-
-```
-✓ create_ticket          → tool_…
-✓ send_email_to_user     → tool_…
-
-Done. Add these to your env (Vercel → Settings → Environment Variables, then redeploy):
-QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
-QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
-```
-
-2. Paste both `wsk_…` secrets into Vercel env, redeploy.
-3. In qlaud's dashboard, find each tool and **toggle tenant-shared**.
-
-Now the AI can call them; customerdog's webhook handlers verify the HMAC, run the contact-policy + rate-limit checks, dispatch via your configured `ticket_destination`, and log to `/admin/activity`.
-
-You can mix and match — for example, register customerdog's `create_ticket` (Path B) for the policy enforcement, but use qlaud's built-in Resend (Path A) for `send_email_to_user`. Tenant-share both.
+- `qlaud-builtin/send-email` (Resend) — for follow-up emails
+- One of `qlaud-builtin/linear-create-issue` / `zendesk-create-ticket` / `slack-post-message` — for escalation
+- Optionally a Stripe / Shopify / Intercom MCP if your support workflow needs customer lookups
 
 ### 8. Configure the agent
 
@@ -201,23 +183,17 @@ Open `https://your-deploy/admin/login` and:
 | `ADMIN_COOKIE_SECRET` | `openssl rand -base64 32` |
 | `NEXT_PUBLIC_APP_URL` | your deploy URL |
 
-## Optional env vars (pick what your config needs)
+## Optional env vars
 
 | Var | When |
 |---|---|
-| `RESEND_API_KEY` | always nice to have — `send_email_to_user` tool needs it; required if `ticket_destination=email` |
-| `TICKET_EMAIL_TO` | if `ticket_destination=email` |
-| `SLACK_WEBHOOK_URL` | if `ticket_destination=slack` |
-| `LINEAR_API_KEY` + `LINEAR_TEAM_ID` | if `ticket_destination=linear` |
-| `ZENDESK_SUBDOMAIN` + `ZENDESK_EMAIL` + `ZENDESK_API_TOKEN` | if `ticket_destination=zendesk` |
+| `FIRECRAWL_API_KEY` | If your KB sources are JS-rendered SPAs that the native `fetch + Mozilla Readability` extractor can't see into. Routes URL ingestion through Firecrawl's `/v1/scrape` (free tier 500 page-credits at firecrawl.dev). Without it, customerdog handles SSR/SSG sites just fine. |
 
 ## Adding a tool
 
-Tools are defined in [`src/lib/tools/definitions.ts`](src/lib/tools/definitions.ts). Add a new entry there + a corresponding route handler at `src/app/api/tools/<your-tool>/route.ts`. The next admin page load auto-registers it with qlaud. qlaud handles the dispatch loop, signature verification, retries, parallel fan-out — your handler just runs the business logic and returns `{ output: any }`.
+Don't add it to customerdog — add it to qlaud. Open [qlaud.ai/tools](https://qlaud.ai/tools), pick a kind (Catalog / MCP server / Custom webhook), paste credentials, tenant-share. The AI sees it on the next chat turn. customerdog's chat handler doesn't enumerate tools per-request; qlaud's tenant mode handles dispatch.
 
-## Adding a ticket destination
-
-Drop a new file in `src/lib/destinations/<name>.ts` exporting a `sendTo<Name>` function. Wire it into the dispatcher in `src/lib/destinations/index.ts`, add the destination value to the `ticket_destination` enum in `supabase/schema.sql` and `src/lib/supabase.ts`, then add the option to the dropdown in `/admin/settings`.
+If you specifically need customerdog-side business logic (e.g., contact-policy gates, audit logs into Supabase), register a Custom (webhook) tool in qlaud pointing at a new `/api/tools/<your-tool>` route on your customerdog deploy. You write the handler, qlaud signs the dispatch with HMAC, you verify and respond. The two webhooks customerdog used to ship for this (`create_ticket`, `send_email_to_user`) were removed in favor of qlaud's built-ins — see git history if you want to revive that pattern.
 
 ## Self-hosting Supabase
 

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { qlaud } from '@/lib/qlaud';
 import { requireSetup } from "@/lib/admin-guard";
-import { supabase, type ActionRow, type ConversationRow } from '@/lib/supabase';
+import { supabase, type ConversationRow } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,22 +18,16 @@ export default async function AdminConversationPage({
   await requireSetup();
   const { id } = await params;
 
-  const [{ data: conv, error: convErr }, { data: actions }] = await Promise.all(
-    [
-      supabase().from('conversations').select('*').eq('id', id).maybeSingle(),
-      supabase()
-        .from('actions')
-        .select('*')
-        .eq('conversation_id', id)
-        .order('created_at', { ascending: true }),
-    ],
-  );
+  const { data: conv, error: convErr } = await supabase()
+    .from('conversations')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
   if (convErr || !conv) {
     notFound();
   }
   const conversation = conv as ConversationRow;
-  const actionRows = (actions as ActionRow[] | null) ?? [];
 
   let messages: Array<{ seq: number; role: string; content: unknown }> = [];
   let transcriptError: string | null = null;
@@ -66,8 +60,6 @@ export default async function AdminConversationPage({
             k="Visitor"
             v={<code>{conversation.anon_visitor_id.slice(0, 24)}…</code>}
           />
-          <Row k="Email" v={conversation.contact_email ?? '—'} />
-          <Row k="Phone" v={conversation.contact_phone ?? '—'} />
           <Row
             k="qlaud thread"
             v={<code>{conversation.qlaud_thread_id.slice(0, 24)}…</code>}
@@ -106,40 +98,19 @@ export default async function AdminConversationPage({
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Actions ({actionRows.length})
-        </h2>
-        {actionRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-            The AI didn&apos;t take any actions during this conversation.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {actionRows.map((a) => (
-              <li
-                key={a.id}
-                className="rounded border border-border px-3 py-2 text-xs"
-              >
-                <div className="font-medium">{a.type}</div>
-                <pre className="mt-1 overflow-auto text-[11px] text-muted-foreground">
-                  {JSON.stringify(a.payload, null, 2)}
-                </pre>
-                {a.result_url ? (
-                  <a
-                    href={a.result_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 inline-block text-primary hover:underline"
-                  >
-                    Open ticket ↗
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <p className="text-xs text-muted-foreground">
+        Tool actions for this conversation (tickets filed, emails sent,
+        etc.) are visible at{' '}
+        <a
+          href="https://qlaud.ai/usage"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          qlaud.ai/usage
+        </a>{' '}
+        — search by the qlaud thread id above.
+      </p>
     </main>
   );
 }

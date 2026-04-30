@@ -31,14 +31,6 @@ export const env = {
   QLAUD_BASE_URL: () => optional('QLAUD_BASE_URL') ?? 'https://api.qlaud.ai',
   QLAUD_KEY: () => required('QLAUD_KEY'),
 
-  // qlaud per-tool HMAC secrets — populated by scripts/register-tools.ts
-  // after the first deploy. Optional at boot; required at the moment a
-  // webhook fires for that specific tool.
-  QLAUD_TOOL_SECRET_CREATE_TICKET: () =>
-    optional('QLAUD_TOOL_SECRET_CREATE_TICKET'),
-  QLAUD_TOOL_SECRET_SEND_EMAIL: () =>
-    optional('QLAUD_TOOL_SECRET_SEND_EMAIL'),
-
   // Supabase — Project Settings → API. Service-role key bypasses RLS;
   // the schema intentionally has no RLS policies (server-only access).
   SUPABASE_URL: () => required('SUPABASE_URL'),
@@ -62,44 +54,14 @@ export const env = {
   ADMIN_PASSWORD: () => required('ADMIN_PASSWORD'),
   ADMIN_COOKIE_SECRET: () => required('ADMIN_COOKIE_SECRET'),
 
-  // ─── Optional integrations (used by the create_ticket / send_email
-  // tools — set whichever your config selects). ───────────────────────
+  // ─── Optional ─────────────────────────────────────────────────────
 
-  // Resend — for send_email + (if ticket_destination='email') outbound
-  // email tickets. Get an API key at resend.com.
-  RESEND_API_KEY: () => optional('RESEND_API_KEY'),
-
-  // Optional sender override for Resend. Without it, customerdog sends
-  // FROM Resend's shared "onboarding@resend.dev" address (works for
-  // anyone, but may land in spam and looks unbranded). To use a real
-  // sender like support@yourcompany.com:
-  //   1. Verify the domain at resend.com → Domains (drop the SPF /
-  //      DKIM / MX DNS records into your DNS host).
-  //   2. Set this env to "Your Company <support@yourcompany.com>"
-  //      OR just "support@yourcompany.com".
-  RESEND_FROM_EMAIL: () => optional('RESEND_FROM_EMAIL'),
-
-  // Firecrawl — optional. When set, KB ingestion routes URL fetches
-  // through Firecrawl's /v1/scrape endpoint, which renders pages in
-  // a real browser server-side. Use this if your sources are
-  // client-rendered SPAs that the native fetch+Readability path
-  // can't see into. Without it, customerdog handles SSR/SSG pages
-  // (most docs and marketing sites) just fine. Free tier covers
-  // 500 page-credits at firecrawl.dev.
+  // Firecrawl — when set, KB ingestion routes URL fetches through
+  // Firecrawl's /v1/scrape endpoint, which renders pages in a real
+  // browser server-side. Use this if your sources are client-rendered
+  // SPAs that the native fetch+Readability path can't see into.
+  // Without it, customerdog handles SSR/SSG pages (most docs and
+  // marketing sites) just fine. Free tier covers 500 page-credits
+  // at firecrawl.dev.
   FIRECRAWL_API_KEY: () => optional('FIRECRAWL_API_KEY'),
-
-  // Email destination
-  TICKET_EMAIL_TO: () => optional('TICKET_EMAIL_TO'),
-
-  // Slack destination
-  SLACK_WEBHOOK_URL: () => optional('SLACK_WEBHOOK_URL'),
-
-  // Linear destination
-  LINEAR_API_KEY: () => optional('LINEAR_API_KEY'),
-  LINEAR_TEAM_ID: () => optional('LINEAR_TEAM_ID'),
-
-  // Zendesk destination
-  ZENDESK_SUBDOMAIN: () => optional('ZENDESK_SUBDOMAIN'),
-  ZENDESK_EMAIL: () => optional('ZENDESK_EMAIL'),
-  ZENDESK_API_TOKEN: () => optional('ZENDESK_API_TOKEN'),
 };

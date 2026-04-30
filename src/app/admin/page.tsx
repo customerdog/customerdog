@@ -49,14 +49,9 @@ export default async function AdminDashboardPage() {
           detail="Browse past visitor sessions and read transcripts."
         />
         <AdminCard
-          href="/admin/activity"
-          title="Activity log"
-          detail="Every email sent, ticket filed, contact captured."
-        />
-        <AdminCard
           href="/admin/settings"
           title="Settings"
-          detail="Brand color, escalation destination, contact policy."
+          detail="Company name, brand color, system-prompt extras."
         />
         <AdminCard
           href="/admin/embed"
@@ -64,6 +59,20 @@ export default async function AdminDashboardPage() {
           detail="Copy the script snippet to add the chat to your site."
         />
       </nav>
+
+      <p className="mt-8 text-xs text-muted-foreground">
+        Tool actions (send email, file ticket, etc.) live at{' '}
+        <a
+          href="https://qlaud.ai/tools"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          qlaud.ai/tools
+        </a>{' '}
+        — enable any built-in or MCP connector and tenant-share it. The AI
+        picks them up automatically.
+      </p>
     </main>
   );
 }
