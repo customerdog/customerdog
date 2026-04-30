@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireSetup } from "@/lib/admin-guard";
 import { getConfig } from '@/lib/supabase';
 import { CopySnippet } from './copy-snippet';
+import { PreviewIframe } from './preview-iframe';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,11 +67,7 @@ export default async function AdminEmbedPage() {
               The iframe below is exactly what visitors see when they click
               the bubble.
             </p>
-            <iframe
-              src={`${appUrl}/embed`}
-              title="Widget preview"
-              className="block h-[600px] w-full max-w-[400px] rounded-xl border border-border bg-background shadow-md"
-            />
+            <PreviewIframe src={`${appUrl}/embed`} title="Widget preview" />
           </div>
         ) : (
           <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">

@@ -41,7 +41,11 @@ export function ChatShell({
 
   return (
     <div
-      className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground"
+      // h-dvh (dynamic viewport height) instead of h-screen so Safari's
+      // address bar / soft keyboard don't push the input bar off-screen
+      // on mobile. h-screen = 100vh, which on iOS Safari includes the
+      // address-bar area even when it's covering the bottom of content.
+      className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
       style={style}
     >
       {mode === 'page' ? (

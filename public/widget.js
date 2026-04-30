@@ -37,6 +37,15 @@
   var icon = script.getAttribute('data-icon') || '🐕';
 
   // Inject minimal, namespaced CSS.
+  // Mobile rules (≤480px):
+  //   - Frame goes fullscreen at 100dvh (NOT 100vh — Safari's address
+  //     bar would otherwise eat the bottom of the chat, hiding the
+  //     send button).
+  //   - When the frame is open, hide the bubble entirely. Otherwise
+  //     it overlays the bottom-right corner of the fullscreen iframe
+  //     (max z-index wins) and steals taps meant for the send button.
+  //     The in-iframe header has its own close button, so the user
+  //     still has a way out.
   var style = document.createElement('style');
   style.textContent =
     '.customerdog-bubble{position:fixed;bottom:20px;right:20px;z-index:2147483647;' +
@@ -51,8 +60,9 @@
     'box-shadow:0 12px 36px rgba(0,0,0,.22);}' +
     '.customerdog-hidden{display:none;}' +
     '@media (max-width:480px){' +
-    '.customerdog-frame{right:0;bottom:0;width:100%;height:100%;' +
-    'max-width:100%;max-height:100%;border-radius:0;}}';
+    '.customerdog-frame{right:0;bottom:0;width:100%;height:100dvh;' +
+    'max-width:100%;max-height:100dvh;border-radius:0;}' +
+    '.customerdog-bubble.customerdog-open{display:none;}}';
   document.head.appendChild(style);
 
   // Bubble button.
@@ -82,8 +92,10 @@
     var f = ensureFrame();
     if (open) {
       f.classList.remove('customerdog-hidden');
+      bubble.classList.add('customerdog-open');
     } else {
       f.classList.add('customerdog-hidden');
+      bubble.classList.remove('customerdog-open');
     }
     bubble.innerHTML = open ? '\u2715' : icon;
   }
