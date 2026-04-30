@@ -5,7 +5,6 @@ import { sendTicket } from '@/lib/destinations';
 import { findConversationByThread, logAction, recordContactCollected } from '@/lib/activity';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getConfig } from '@/lib/supabase';
-import { getToolByName } from '@/lib/tool-register';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -46,12 +45,13 @@ type WebhookBody = {
 };
 
 export async function POST(req: Request) {
-  // Resolve the HMAC secret. Supabase is the source of truth (set by
-  // ensureToolsRegistered on first admin load); env is a legacy
-  // fallback for operators who already used the npm run register-tools
-  // script.
-  const reg = await getToolByName('create_ticket').catch(() => null);
-  const secret = reg?.hmac_secret ?? env.QLAUD_TOOL_SECRET_CREATE_TICKET();
+  // HMAC secret comes from env. The operator gets it once when they
+  // register this webhook with qlaud (either via `npm run register-tools`
+  // or by clicking "Add tool → Custom (webhook)" in the qlaud
+  // dashboard). They paste the wsk_… secret into Vercel env, redeploy,
+  // and webhook signature verification works. Without it, qlaud's
+  // dispatch attempts hit a 401 here and the AI gets a tool error.
+  const secret = env.QLAUD_TOOL_SECRET_CREATE_TICKET();
   if (!secret) {
     return NextResponse.json(
       { error: 'tool_not_registered' },

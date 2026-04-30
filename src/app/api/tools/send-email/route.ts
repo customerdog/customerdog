@@ -5,7 +5,6 @@ import { sendEmail } from '@/lib/destinations/email';
 import { findConversationByThread, logAction } from '@/lib/activity';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getConfig } from '@/lib/supabase';
-import { getToolByName } from '@/lib/tool-register';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -43,10 +42,9 @@ type WebhookBody = {
 };
 
 export async function POST(req: Request) {
-  // Supabase first; env fallback for legacy operators who used the
-  // npm run register-tools script before auto-registration shipped.
-  const reg = await getToolByName('send_email_to_user').catch(() => null);
-  const secret = reg?.hmac_secret ?? env.QLAUD_TOOL_SECRET_SEND_EMAIL();
+  // HMAC secret comes from env. Operator pastes it after registering
+  // the webhook at qlaud's dashboard (or via npm run register-tools).
+  const secret = env.QLAUD_TOOL_SECRET_SEND_EMAIL();
   if (!secret) {
     return NextResponse.json(
       { error: 'tool_not_registered' },

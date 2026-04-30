@@ -121,27 +121,52 @@ Open `http://localhost:3000/admin/login`, sign in with your `ADMIN_PASSWORD`, pa
 
 **Or any other Next.js host** — Railway, Fly.io, Cloudflare Pages with the Workers adapter, your own VPS. Set the same seven env vars in the host's environment configuration, then `npm run build` + `npm run start`. No Vercel-specific code anywhere in the repo.
 
-### 7. First admin visit — auto-bootstrap
+### 7. First admin visit — schema bootstrap
 
-Open `https://your-deploy/admin/login`, sign in. The first admin page request triggers two automatic bootstrap steps in the background, both idempotent and once-per-deploy:
+Open `https://your-deploy/admin/login`, sign in. The first admin page request connects via `DATABASE_URL`, probes `information_schema.tables`, and runs `supabase/schema.sql` if any of our tables are missing. Idempotent + once-per-deploy. If anything fails, the admin error boundary shows the underlying message + a likely fix.
 
-1. **Schema install** — connects via `DATABASE_URL`, probes `information_schema.tables`, runs `supabase/schema.sql` if any of our tables are missing.
-2. **Tool registration** — for every tool in `src/lib/tools/definitions.ts` that doesn't yet have a row in `tool_registrations`, calls qlaud's `POST /v1/tools` and stores the result. The HMAC secrets live in Supabase, not in env vars.
+### 7a. Set up tools at qlaud (one-time)
 
-You don't need to run `npm run register-tools` (it's still there as a manual escape hatch for forced rotation). If anything fails, the admin error boundary shows the underlying message + a likely fix.
+customerdog's chat handler sends `tools_mode: "tenant"`, which means the AI gets exactly the tools you've configured + tenant-shared in your qlaud dashboard. **Until you do this once, the AI can only answer from the KB — it has no escalation tools.** customerdog itself doesn't register or manage tools; that's qlaud's job.
 
-### 7a. Tenant-share the tools at qlaud (one-time)
+You have two paths, both ~5 minutes. **Pick one based on whether you want customerdog's specific business logic.**
 
-customerdog's chat handler sends `tools_mode: "tenant"`, which means the AI gets exactly the tools you've marked as tenant-shared in your qlaud dashboard. **Until you do this once, the AI runs with zero tools attached and can only answer from the KB — `create_ticket` and `send_email_to_user` won't fire.**
+#### Path A: Use qlaud built-ins (recommended for most operators)
 
-Steps (one-time, takes ~30 seconds):
+Open [qlaud.ai/tools](https://qlaud.ai/tools) → **Catalog** tab. Enable any of:
 
-1. Open [qlaud.ai/tools](https://qlaud.ai/tools).
-2. Find the two webhooks customerdog auto-registered: `create_ticket` and `send_email_to_user`. They'll have your deploy URL listed as the webhook target.
-3. Toggle each one to **tenant-shared** (or pick the equivalent in qlaud's UI — the "Connect with your company's key" / share toggle).
-4. Optionally enable any qlaud built-ins or MCP catalog connectors you want (Resend, Linear, Stripe, GitHub, etc.) — also tenant-share them. They surface to the AI through the same flow as our webhooks.
+- **Resend send-email** — paste your Resend API key. Now the AI can send emails directly.
+- **Linear / Zendesk / GitHub / Notion / Slack built-ins** — paste each provider's credentials. The AI gets `linear.create_issue`, `zendesk.open_ticket`, `slack.post_message`, etc.
+- **MCP catalog connectors** — Stripe, Shopify, HubSpot, PostHog, Cal.com, etc. One-click connect.
 
-That's it. Every chat turn now includes whichever tools you've shared. To revoke a tool from the AI, untoggle it in the dashboard — no redeploy needed.
+Tenant-share each one, hit save. customerdog needs zero env vars or code changes. The AI sees these tools through tenant mode on the next chat turn.
+
+#### Path B: Use customerdog's webhook tools (for contact policy + audit log)
+
+If you want customerdog-specific business logic — the `visitor_contact_required` gate before filing a ticket, the activity-log writes to `/admin/activity`, the per-conversation rate limits — you can register customerdog's two opinionated webhooks:
+
+```bash
+# 1. Make sure NEXT_PUBLIC_APP_URL in .env.local matches your Vercel URL.
+npm run register-tools
+```
+
+The script POSTs to qlaud's `/v1/tools` for `create_ticket` and `send_email_to_user`. Output:
+
+```
+✓ create_ticket          → tool_…
+✓ send_email_to_user     → tool_…
+
+Done. Add these to your env (Vercel → Settings → Environment Variables, then redeploy):
+QLAUD_TOOL_SECRET_CREATE_TICKET=wsk_…
+QLAUD_TOOL_SECRET_SEND_EMAIL=wsk_…
+```
+
+2. Paste both `wsk_…` secrets into Vercel env, redeploy.
+3. In qlaud's dashboard, find each tool and **toggle tenant-shared**.
+
+Now the AI can call them; customerdog's webhook handlers verify the HMAC, run the contact-policy + rate-limit checks, dispatch via your configured `ticket_destination`, and log to `/admin/activity`.
+
+You can mix and match — for example, register customerdog's `create_ticket` (Path B) for the policy enforcement, but use qlaud's built-in Resend (Path A) for `send_email_to_user`. Tenant-share both.
 
 ### 8. Configure the agent
 

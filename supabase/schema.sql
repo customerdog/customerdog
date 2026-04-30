@@ -87,20 +87,12 @@ CREATE INDEX IF NOT EXISTS actions_conv_idx ON actions (conversation_id);
 CREATE INDEX IF NOT EXISTS actions_type_idx ON actions (type);
 CREATE INDEX IF NOT EXISTS actions_created_idx ON actions (created_at DESC);
 
--- ─── tool_registrations ───────────────────────────────────────────────
--- Tracks which qlaud tools we've registered for this deploy and stores
--- their HMAC signing secrets. Auto-populated on first admin page load
--- (src/lib/tool-register.ts) — operators don't need to run a separate
--- `npm run register-tools` script unless they want to.
-CREATE TABLE IF NOT EXISTS tool_registrations (
-  name TEXT PRIMARY KEY,                  -- create_ticket, send_email_to_user, …
-  qlaud_tool_id TEXT NOT NULL,            -- tool_xxx returned by POST /v1/tools
-  hmac_secret TEXT NOT NULL,              -- per-tool secret for webhook HMAC verify
-  webhook_url TEXT NOT NULL,              -- snapshot of where qlaud will POST
-  registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ─── notes ─────────────────────────────────────────────────────────────
+-- Tool registration moved to qlaud's dashboard (tenant mode). The
+-- previously-shipped `tool_registrations` table is no longer created on
+-- new deploys; existing deploys may still have it sitting orphaned.
+-- Drop it manually if you care:
+--   DROP TABLE IF EXISTS tool_registrations;
 -- Row-level security is intentionally NOT enabled here. customerdog
 -- accesses Supabase exclusively via the service-role key from server-
 -- side code (never browser); the database is gated by the API key, not

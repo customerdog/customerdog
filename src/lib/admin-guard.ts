@@ -2,7 +2,6 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { tryAutoMigrate } from './auto-migrate';
 import { supabase } from './supabase';
-import { ensureToolsRegistered } from './tool-register';
 
 /**
  * Run at the top of any admin page that touches Supabase. Three-tier:
@@ -12,12 +11,12 @@ import { ensureToolsRegistered } from './tool-register';
  *   3. Schema missing, no DATABASE_URL → redirect to /admin/setup
  *      (click-to-install fallback)
  *
- * The probe targets the LATEST-added table (tool_registrations), not
- * the oldest. Two scenarios this covers in one check:
+ * The probe targets the LATEST-added table. Two scenarios this covers
+ * in one check:
  *   - Fresh deploy, no tables at all → probe fails → migrate
- *   - Older deploy that only has the original 4 tables → probe fails
- *     → migrate (idempotent; CREATE TABLE IF NOT EXISTS no-ops the
- *     existing 4, creates the missing 5th)
+ *   - Older deploy missing the latest table → probe fails → migrate
+ *     (idempotent; CREATE TABLE IF NOT EXISTS no-ops the existing
+ *     tables, creates the missing one)
  *
  * Other Supabase errors (auth, network) fall through to /admin/error.tsx.
  */
@@ -26,17 +25,8 @@ import { ensureToolsRegistered } from './tool-register';
 // always targets the most recently introduced table. Two callers depend
 // on it: requireSchema (gates admin pages) AND /admin/setup (decides
 // whether to redirect back to /admin). They MUST agree, otherwise an
-// upgrade where this latest table is missing creates a redirect loop:
-//
-//   /admin           — requireSchema probes LATEST_TABLE → missing →
-//                      auto-migrate fails → redirect /admin/setup
-//   /admin/setup     — checks LATEST_TABLE → also missing → renders
-//                      the setup UI (does NOT redirect back to /admin)
-//
-// If /admin/setup were checking a DIFFERENT table (e.g., the original
-// `config`), an old deploy with config-but-not-LATEST_TABLE would loop
-// forever between the two routes.
-export const LATEST_TABLE = 'tool_registrations';
+// upgrade where this latest table is missing creates a redirect loop.
+export const LATEST_TABLE = 'actions';
 
 /** True if the deploy's database has every table in schema.sql,
  *  inferred by probing the most recently added one. False if any
@@ -44,7 +34,7 @@ export const LATEST_TABLE = 'tool_registrations';
 export async function isSchemaCurrent(): Promise<boolean> {
   const probe = await supabase()
     .from(LATEST_TABLE)
-    .select('name')
+    .select('id')
     .limit(1);
   if (!probe.error) return true;
   if (isSchemaMissing(probe.error)) return false;
@@ -104,18 +94,9 @@ export function getSupabaseSqlEditorUrl(): string {
   return `https://supabase.com/dashboard/project/${m[1]}/sql/new`;
 }
 
-/**
- * Compose schema + tools as a single "is this deploy fully bootstrapped"
- * check. Call this from any admin page that needs both the database AND
- * the tool registrations to be in place. Internally:
- *   1. requireSchema() — ensures all current tables exist (auto-migrates
- *      if any are missing or the deploy was upgraded from an older
- *      schema version).
- *   2. ensureToolsRegistered() — registers any tool defined in
- *      src/lib/tools/definitions.ts that doesn't yet have a row in
- *      tool_registrations. Idempotent + cached.
- */
-export async function requireSetup(): Promise<void> {
-  await requireSchema();
-  await ensureToolsRegistered();
-}
+/** Compatibility alias. customerdog used to compose schema + tool
+ *  registration here; tool registration moved to qlaud's tenant-mode
+ *  dashboard, so requireSetup is now just requireSchema. Kept as
+ *  a named export so admin pages don't all need to be touched on
+ *  every refactor. */
+export const requireSetup = requireSchema;

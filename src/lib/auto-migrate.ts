@@ -36,7 +36,6 @@ const EXPECTED_TABLES = [
   'kb_sources',
   'conversations',
   'actions',
-  'tool_registrations',
 ] as const;
 
 let migrated = false;

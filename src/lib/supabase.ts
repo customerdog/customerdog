@@ -78,14 +78,6 @@ export type ActionRow = {
   created_at: string;
 };
 
-export type ToolRegistrationRow = {
-  name: string;
-  qlaud_tool_id: string;
-  hmac_secret: string;
-  webhook_url: string;
-  registered_at: string;
-};
-
 // ─── Convenience helpers used across admin + chat handlers ─────────────
 
 /** Read the single config row. Throws if missing (the schema seeds it). */
