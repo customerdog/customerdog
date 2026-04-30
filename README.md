@@ -34,12 +34,12 @@ The button opens Vercel's import flow with all seven required env vars pre-liste
 | Layer | Choice |
 |---|---|
 | Framework | Next.js 15 (App Router) |
-| AI | [qlaud](https://qlaud.ai) — threads, tool dispatch loop, prompt cache passthrough |
-| Storage | [Supabase](https://supabase.com) — Postgres + built-in Table Editor |
+| AI runtime | [qlaud](https://qlaud.ai) — threads, tool dispatch, prompt cache passthrough, tenant-mode tool catalog |
+| Tools (email, tickets, lookups, …) | Configured at qlaud.ai/tools — built-ins (Resend, Slack, Linear, Zendesk, GitHub, Notion) + MCP catalog (Stripe, Shopify, HubSpot, Cal.com, …) |
+| Storage | [Supabase](https://supabase.com) — Postgres for KB + conversations + config |
+| HTML extraction | `@mozilla/readability` + `jsdom`, optional Firecrawl for JS-rendered pages |
 | Admin auth | Single shared password → signed HTTP-only cookie |
 | Visitor session | HTTP-only cookie, anonymous UUID |
-| Email | [Resend](https://resend.com) |
-| Tickets | Email / Slack / Linear / Zendesk (admin picks one) |
 | Widget | Plain `<script>` + iframe + postMessage (no build step on host site) |
 
 ## Setup, step by step
@@ -84,7 +84,7 @@ Sign in at [qlaud.ai/keys](https://qlaud.ai/keys) → **Create key** with **scop
 cp .env.example .env.local
 ```
 
-Now open `.env.local` and paste in the six required values. The two `ADMIN_*` vars want strong random strings — run these and paste each output into the matching slot:
+Now open `.env.local` and paste in the seven required values. The two `ADMIN_*` vars want strong random strings — run these and paste each output into the matching slot:
 
 ```bash
 openssl rand -base64 32   # → ADMIN_PASSWORD
@@ -94,12 +94,13 @@ openssl rand -base64 32   # → ADMIN_COOKIE_SECRET
 Final `.env.local` should look like:
 
 ```
-QLAUD_KEY=qlk_live_…                          # from step 3
-SUPABASE_URL=https://xxx.supabase.co          # from step 2
-SUPABASE_SERVICE_ROLE_KEY=eyJ…                # from step 2
-ADMIN_PASSWORD=…                              # openssl rand -base64 32
-ADMIN_COOKIE_SECRET=…                         # openssl rand -base64 32
-NEXT_PUBLIC_APP_URL=http://localhost:3000     # change to deploy URL after step 6
+QLAUD_KEY=qlk_live_…                                            # from step 3
+SUPABASE_URL=https://xxx.supabase.co                            # from step 2
+SUPABASE_SERVICE_ROLE_KEY=eyJ…                                  # from step 2
+DATABASE_URL=postgresql://postgres.xxx:…@…pooler.supabase.com:5432/postgres   # from step 2
+ADMIN_PASSWORD=…                                                # openssl rand -base64 32
+ADMIN_COOKIE_SECRET=…                                           # openssl rand -base64 32
+NEXT_PUBLIC_APP_URL=http://localhost:3000                       # change to deploy URL after step 6
 ```
 
 ### 5. Verify locally
@@ -113,7 +114,7 @@ Open `http://localhost:3000/admin/login`, sign in with your `ADMIN_PASSWORD`, pa
 
 ### 6. Deploy
 
-**One-click via the button at the top of this README** — Vercel walks you through entering all six env vars. After it deploys, come back and:
+**One-click via the button at the top of this README** — Vercel walks you through entering all seven env vars. After it deploys, come back and:
 
 - Update `NEXT_PUBLIC_APP_URL` in Vercel → Settings → Environment Variables to the real deploy URL (e.g., `https://support.yourcompany.com`)
 - Redeploy
@@ -154,9 +155,11 @@ The AI sees it on the next chat turn, no redeploy needed. To revoke an integrati
 
 Open `https://your-deploy/admin/login` and:
 
-1. **`/admin/settings`** — set company name, brand color, ticket destination (email/Slack/Linear/Zendesk), visitor contact policy.
-2. **`/admin/kb`** — paste your docs URL (server fetches + parses) or raw markdown. The AI starts answering from it on the next chat turn.
+1. **`/admin/settings`** — company name, brand color, support email (visitor-facing fallback), and any extra system-prompt instructions (tone of voice, things to never say, etc.).
+2. **`/admin/kb`** — paste your docs URL (server fetches + parses) or raw markdown, or use **Crawl an entire docs site** to ingest a whole sitemap. The AI starts answering from it on the next chat turn.
 3. **`/admin/embed`** — copy the `<script>` snippet onto your site, or just point visitors to `https://your-deploy/chat`.
+
+Already done step 7a (added tools at qlaud.ai/tools)? You're live.
 
 ## Three ways visitors find you
 
@@ -176,12 +179,13 @@ Open `https://your-deploy/admin/login` and:
 
 | Var | Where to get it |
 |---|---|
-| `QLAUD_KEY` | qlaud.ai/keys (admin scope) |
-| `SUPABASE_URL` | supabase.com → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | same |
+| `QLAUD_KEY` | [qlaud.ai/keys](https://qlaud.ai/keys) |
+| `SUPABASE_URL` | Supabase project → top-right **Connect** popover (project URL) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API Keys → **Secret** key (NOT publishable / anon) |
+| `DATABASE_URL` | Supabase → Settings → Database → Connection string → **Session pooler** tab (port 5432) |
 | `ADMIN_PASSWORD` | `openssl rand -base64 32` |
 | `ADMIN_COOKIE_SECRET` | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | your deploy URL |
+| `NEXT_PUBLIC_APP_URL` | your deploy URL (placeholder OK at first deploy; update + redeploy after) |
 
 ## Optional env vars
 
