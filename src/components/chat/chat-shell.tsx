@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DogLogo } from '@/components/dog-logo';
 import type { ThreadMessage } from '@/lib/qlaud';
 import { MessageStream } from './message-stream';
 import { InputBar } from './input-bar';
@@ -45,7 +46,7 @@ export function ChatShell({
     >
       {mode === 'page' ? (
         <header className="flex items-center gap-2 border-b border-border bg-background px-4 py-3">
-          <span className="text-base">🐕</span>
+          <DogLogo size={20} />
           <span className="text-sm font-semibold">{companyName} support</span>
         </header>
       ) : (
@@ -104,8 +105,8 @@ export function ChatShell({
 function EmptyState({ companyName }: { companyName: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-      <div className="text-3xl">🐕</div>
-      <h2 className="mt-3 text-lg font-semibold">
+      <DogLogo size={56} />
+      <h2 className="mt-4 text-lg font-semibold">
         Hi! I&apos;m the {companyName} AI assistant.
       </h2>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">

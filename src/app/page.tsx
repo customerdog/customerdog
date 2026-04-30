@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DogLogo } from '@/components/dog-logo';
 import { getConfig } from '@/lib/supabase';
 import { getMissingRequiredEnv } from '@/lib/setup-check';
 import { SetupScreen } from '@/components/setup-screen';
@@ -39,9 +40,7 @@ export default async function LandingPage() {
           href="/"
           className="flex items-center gap-2 text-lg font-semibold"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            🐕
-          </span>
+          <DogLogo size={28} />
           {companyName}
         </Link>
         <nav className="flex items-center gap-4 text-sm">

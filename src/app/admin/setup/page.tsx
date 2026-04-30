@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { DogLogo } from '@/components/dog-logo';
 import { CopySqlBlock } from './copy-sql';
 import { getSchemaSql } from '@/lib/schema-sql';
 import { getSupabaseSqlEditorUrl, isSchemaCurrent } from '@/lib/admin-guard';
@@ -49,8 +50,8 @@ export default async function AdminSetupPage() {
         >
           ← Admin
         </Link>
-        <div className="flex items-center gap-2 text-2xl">
-          <span>🐕</span>
+        <div className="flex items-center gap-3 text-2xl">
+          <DogLogo size={32} />
           <span className="font-semibold tracking-tight">
             One last step: install the database schema
           </span>

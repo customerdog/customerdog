@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { DogLogo } from '@/components/dog-logo';
 
 /**
  * Admin segment error boundary. Catches anything thrown during render
@@ -33,8 +34,8 @@ export default function AdminError({
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-12">
       <div className="space-y-5">
-        <div className="flex items-center gap-2 text-2xl">
-          <span>🐕</span>
+        <div className="flex items-center gap-3 text-2xl">
+          <DogLogo size={32} />
           <span className="font-semibold tracking-tight">
             Something went wrong loading this admin page
           </span>

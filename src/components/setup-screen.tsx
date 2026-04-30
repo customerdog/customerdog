@@ -1,3 +1,4 @@
+import { DogLogo } from '@/components/dog-logo';
 import type { MissingVar } from '@/lib/setup-check';
 
 /**
@@ -25,8 +26,8 @@ export function SetupScreen({
       }
     >
       <div className="space-y-5">
-        <div className="flex items-center gap-2 text-2xl">
-          <span>🐕</span>
+        <div className="flex items-center gap-3 text-2xl">
+          <DogLogo size={32} />
           <span className="font-semibold tracking-tight">
             customerdog setup isn&apos;t finished
           </span>
