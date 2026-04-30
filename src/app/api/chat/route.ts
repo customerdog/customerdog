@@ -30,13 +30,27 @@ export const maxDuration = 60;
 //   3. Assemble the system prompt from the KB. Send to qlaud as a
 //      structured message with cache_control: ephemeral — Anthropic's
 //      prompt cache eats the cost on every subsequent turn.
-//   4. Stream the SSE response back to the browser verbatim.
+//   4. Stream the SSE response back to the browser verbatim — qlaud
+//      multiplexes tool dispatch into the same stream via
+//      `qlaud.tool_dispatch_*` events, parsed by lib/qlaud-stream.ts.
 //
-// Tools: we DO NOT pass `tools: [...]` in the request body. qlaud has
-// account-level smart tool discovery — every tool we registered via
-// /v1/tools (rows in our tool_registrations table) is available to
-// the AI on every chat turn automatically. Bonus: this avoids qlaud's
-// stream + tools-array 400, so streaming Just Works with tool dispatch.
+// Tool exposure: tools_mode='dynamic' (also the default when no tools
+// array is passed). Per qlaud's /v1/threads docs:
+//   "model gets 4 meta-tools, auto-discovers + dispatches anything in
+//    the catalog"
+// so the AI sees:
+//   - Custom webhooks we registered (create_ticket, send_email_to_user
+//     in tool_registrations)
+//   - Any qlaud built-in the operator enabled in their dashboard
+//     (qlaud-builtin/send-email, /linear, /zendesk, etc.)
+//   - Any MCP server they connected (/v1/mcp-servers + /v1/mcp-catalog)
+// All of them appear via the same `qlaud_search_tools` meta-tool when
+// the model needs one — no per-request enumeration required from us.
+//
+// Streaming + tool dispatch is supported across every model family
+// (ref: docs.qlaud.ai/api-reference/threads "Streaming + tools —
+// supported models"). One SSE connection carries both content_block_*
+// events AND qlaud.tool_dispatch_* events; client renders inline.
 type ErrStatus = 400 | 401 | 402 | 403 | 404 | 429 | 500 | 502 | 503;
 const errStatus = (n: number): ErrStatus =>
   ([400, 401, 402, 403, 404, 429, 500, 502, 503].includes(n)
@@ -123,8 +137,15 @@ export async function POST(req: Request) {
   // Anthropic-style structured `system` field with cache_control marker.
   // qlaud forwards this verbatim to Anthropic, which prompt-caches the
   // long KB so subsequent turns in the same visitor's conversation cost
-  // ~10% of an uncached turn. Note: NO `tools` field — qlaud picks up
-  // registered tools automatically via account-level smart discovery.
+  // ~10% of an uncached turn.
+  //
+  // tools_mode: 'dynamic' is qlaud's default when no `tools` array is
+  // passed; setting it explicitly makes the contract obvious. The AI
+  // gets 4 meta-tools (qlaud_search_tools, qlaud_manage_connections,
+  // qlaud_call_tool, qlaud_get_tool_schema) and uses them to discover
+  // + invoke any registered tool — our custom webhooks + qlaud
+  // built-ins + connected MCP servers all surface through the same
+  // discovery flow.
   const requestBody: Record<string, unknown> = {
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
@@ -136,6 +157,7 @@ export async function POST(req: Request) {
       },
     ],
     content: message,
+    tools_mode: 'dynamic',
   };
 
   let upstream: Response;

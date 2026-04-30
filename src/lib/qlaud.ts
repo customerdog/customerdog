@@ -15,6 +15,19 @@ import { env } from './env';
 // QLAUD_KEY for everything: chat (threads + messages) AND admin ops
 // (tools registration). Operators who care about blast radius can
 // split this into two keys later.
+//
+// Tool exposure model (as of qlaud's tools_mode shipping):
+//   - We send chat requests with tools_mode='dynamic' and NO `tools`
+//     array. qlaud injects 4 meta-tools and the model auto-discovers
+//     anything in the account catalog at dispatch time.
+//   - That catalog can include three kinds of tool, all interchangeable
+//     from the model's perspective:
+//       1. Custom webhooks (POST /v1/tools)              — what we ship
+//       2. Built-ins   (POST /v1/builtins, e.g. Resend)  — operator-enabled
+//       3. MCP servers (POST /v1/mcp-servers, custom URL or catalog)
+//   - Streaming + tool dispatch coexist on a single SSE; lib/qlaud-stream
+//     parses both standard Anthropic events and qlaud.* side-channel
+//     events.
 
 const BASE = () => env.QLAUD_BASE_URL();
 const KEY = () => env.QLAUD_KEY();
